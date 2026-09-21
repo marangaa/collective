@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { trpc } from "@/utils/trpc";
 
@@ -7,45 +7,59 @@ export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
 
-const TITLE_TEXT = `
- ██████╗ ███████╗████████╗████████╗███████╗██████╗
- ██╔══██╗██╔════╝╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗
- ██████╔╝█████╗     ██║      ██║   █████╗  ██████╔╝
- ██╔══██╗██╔══╝     ██║      ██║   ██╔══╝  ██╔══██╗
- ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
- ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
-
- ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
- ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-    ██║       ███████╗   ██║   ███████║██║     █████╔╝
-    ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-    ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-    ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
- `;
-
 function HomeComponent() {
-  const healthCheck = useQuery(trpc.healthCheck.queryOptions());
+  const caseList = useQuery(trpc.audit.listCases.queryOptions());
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-2">
-      <pre className="overflow-x-auto font-mono text-sm">{TITLE_TEXT}</pre>
-      <div className="grid gap-6">
-        <section className="rounded-lg border p-4">
-          <h2 className="mb-2 font-medium">API Status</h2>
-          <div className="flex items-center gap-2">
-            <div
-              className={`h-2 w-2 rounded-full ${healthCheck.data ? "bg-green-500" : "bg-red-500"}`}
-            />
-            <span className="text-sm text-muted-foreground">
-              {healthCheck.isLoading
-                ? "Checking..."
-                : healthCheck.data
-                  ? "Connected"
-                  : "Disconnected"}
-            </span>
+    <div className="container mx-auto max-w-3xl px-4 py-10">
+      <p className="text-sm uppercase tracking-widest text-muted-foreground">collective</p>
+      <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">
+        The county said it was built. <span className="text-muted-foreground">Was it?</span>
+      </h1>
+      <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+        We assemble the public record — audits, budgets, tenders, press claims — and what
+        communities can see with their own eyes, into one evidence chain you can check
+        yourself. Every claim links to its source. Every gap becomes a next step.
+      </p>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Open case files
+        </h2>
+        {caseList.data?.map((c) => (
+          <Link
+            key={c.id}
+            to="/case/$slug"
+            params={{ slug: c.slug }}
+            className="block rounded-lg border p-4 hover:bg-muted/50"
+          >
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              {c.county} County
+            </div>
+            <div className="mt-0.5 font-semibold">{c.title}</div>
+            <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{c.summary}</div>
+          </Link>
+        ))}
+        {caseList.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      </section>
+
+      <section className="mt-10 grid gap-3 sm:grid-cols-3">
+        {[
+          ["1 · The record", "Official audits, budgets, tenders and press claims — fetched, hashed, and quoted verbatim. Nothing enters without its source."],
+          ["2 · The ground", "Residents report what they actually see — anonymously, offline-capable, photos stripped of hidden location data."],
+          ["3 · The next step", "Where the record can't establish delivery, we draft the exact request that resolves it — under the Access to Information Act, 2016."],
+        ].map(([t, d]) => (
+          <div key={t} className="rounded-lg border p-4">
+            <div className="text-sm font-semibold">{t}</div>
+            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{d}</div>
           </div>
-        </section>
-      </div>
+        ))}
+      </section>
+
+      <p className="mt-10 text-xs text-muted-foreground">
+        Evidence first. Inference second. An echo is not a source.
+      </p>
     </div>
   );
 }
+
