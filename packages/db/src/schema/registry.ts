@@ -1,9 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
-  boolean,
   date,
-  doublePrecision,
   index,
   integer,
   jsonb,
@@ -14,15 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import {
-  caseStatus,
-  docType,
-  extractionState,
-  partyRole,
-  sourceType,
-  trustTier,
-  vaultState,
-} from "./enums";
+import { caseStatus, docType, extractionState, sourceType, trustTier, vaultState } from "./enums";
 
 export const sources = pgTable("sources", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -85,34 +75,6 @@ export const cases = pgTable(
   },
   (t) => [uniqueIndex("cases_slug_idx").on(t.slug)],
 );
-
-export const projects = pgTable(
-  "projects",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    caseId: uuid("case_id")
-      .notNull()
-      .references(() => cases.id),
-    name: text("name").notNull(),
-    sector: text("sector").notNull().default("health"),
-    ward: text("ward"),
-    subCounty: text("sub_county"),
-    lat: doublePrecision("lat"),
-    lng: doublePrecision("lng"),
-    locationNote: text("location_note"),
-    ocdsId: text("ocds_id"),
-  },
-  (t) => [index("projects_case_idx").on(t.caseId)],
-);
-
-export const parties = pgTable("parties", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name"),
-  label: text("label").notNull(),
-  role: partyRole("role").notNull(),
-  identifiers: jsonb("identifiers"),
-  isUnnamed: boolean("is_unnamed").notNull().default(false),
-});
 
 export const schemaMeta = pgTable("schema_meta", {
   key: text("key").primaryKey(),

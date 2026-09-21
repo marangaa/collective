@@ -33,6 +33,25 @@ export const vaultState = pgEnum("vault_state", ["pending", "vaulted", "failed"]
 
 export const caseStatus = pgEnum("case_status", ["open", "monitoring", "resolved"]);
 
+// ── v3: entity model ────────────────────────────────────────────────────────
+export const entityType = pgEnum("entity_type", [
+  "project",
+  "site",
+  "organization",
+  "institution",
+  "contract",
+  "person",
+]);
+
+export const entityRelationKind = pgEnum("entity_relation_kind", [
+  "site_of",
+  "part_of",
+  "managed_by",
+  "implemented_by",
+  "concerns",
+  "same_as",
+]);
+
 export const partyRole = pgEnum("party_role", [
   "contracting_authority",
   "contractor",
@@ -41,7 +60,28 @@ export const partyRole = pgEnum("party_role", [
   "oversight",
 ]);
 
-// OCDS-aligned stages
+// ── v3: generalized assertion predicates (OCDS-aligned where applicable) ───
+export const claimPredicate = pgEnum("claim_predicate", [
+  "asserted_status",
+  "tender_published",
+  "contract_awarded_to",
+  "contract_value",
+  "budget_allocated",
+  "payment_made",
+  "expected_completion",
+  "completion_claimed",
+  "progress_reported",
+  "inspection_finding",
+  "delivery_observed",
+  "observed_status",
+  "managed_by",
+  "implemented_by",
+  "located_in",
+  "commissioned",
+  "demolished",
+  "operational",
+]);
+
 export const claimStage = pgEnum("claim_stage", [
   "planning",
   "tender",
@@ -49,17 +89,6 @@ export const claimStage = pgEnum("claim_stage", [
   "contract",
   "implementation",
   "completion",
-]);
-
-export const claimKind = pgEnum("claim_kind", [
-  "budget_allocated",
-  "tender_published",
-  "award_made",
-  "payment_made",
-  "progress_reported",
-  "completion_claimed",
-  "inspection_finding",
-  "delivery_observed",
 ]);
 
 export const observedStatus = pgEnum("observed_status", [
@@ -75,6 +104,16 @@ export const observedStatus = pgEnum("observed_status", [
 export const extractionMethod = pgEnum("extraction_method", ["llm", "rule", "manual"]);
 
 export const reviewState = pgEnum("review_state", ["pending", "approved", "rejected"]);
+
+export const reviewAction = pgEnum("review_action", ["approved", "edited", "rejected"]);
+
+export const candidateStatus = pgEnum("candidate_status", [
+  "pending",
+  "needs_review",
+  "approved",
+  "rejected",
+  "published",
+]);
 
 export const linkRelation = pgEnum("link_relation", [
   "supports",
@@ -100,12 +139,21 @@ export const verdictValue = pgEnum("verdict_value", [
   "partially_corroborated",
 ]);
 
-export const reportChannel = pgEnum("report_channel", ["pwa", "ussd", "whatsapp"]);
+export const reportChannel = pgEnum("report_channel", ["pwa", "ussd", "whatsapp", "voice"]);
 
 export const corroborationState = pgEnum("corroboration_state", [
   "unverified",
   "corroborated",
   "reviewed",
+]);
+
+export const mediaKind = pgEnum("media_kind", ["image", "audio", "video"]);
+
+export const derivedKind = pgEnum("derived_kind", [
+  "transcript",
+  "ocr",
+  "description",
+  "frame_note",
 ]);
 
 export const institutionKind = pgEnum("institution_kind", [
@@ -118,13 +166,28 @@ export const institutionKind = pgEnum("institution_kind", [
   "judiciary",
 ]);
 
-export const nextStepKind = pgEnum("next_step_kind", [
+export const actionKind = pgEnum("action_kind", [
   "ati_request",
   "oversight_referral",
   "evidence_needed",
   "field_verification",
 ]);
 
-export const nextStepStatus = pgEnum("next_step_status", ["open", "done", "dismissed"]);
+export const actionStatus = pgEnum("action_status", ["open", "done", "dismissed"]);
 
-export const actorKind = pgEnum("actor_kind", ["system", "extractor", "reviewer"]);
+export const requestKind = pgEnum("request_kind", [
+  "document",
+  "observation",
+  "expert",
+  "official_confirmation",
+]);
+
+export const requestStatus = pgEnum("request_status", ["open", "fulfilled", "dismissed"]);
+
+export const actorKind = pgEnum("actor_kind", [
+  "system",
+  "extractor",
+  "reviewer",
+  "observer",
+]);
+

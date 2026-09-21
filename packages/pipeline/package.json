@@ -1,0 +1,22 @@
+{
+  "name": "@collective/pipeline",
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "ingest": "bun run --env-file=.env src/run.ts ingest",
+    "extract": "bun run --env-file=.env src/run.ts extract",
+    "reconcile": "bun run --env-file=.env src/run.ts reconcile"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^4.0.76",
+    "@collective/db": "workspace:*",
+    "ai": "^7.0.107",
+    "drizzle-orm": "1.0.0-rc.4",
+    "unpdf": "^1.0.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@collective/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}
