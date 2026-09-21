@@ -51,15 +51,45 @@ PDF/Gemini workloads exceed comfortable Workers budgets today; Hono stays Worker
 If the OAG doesn't name a contractor, we don't. Labels like "Contractor A (unnamed in OAG
 report)". Defamation-safe, and *more* credible: we show the record, not our conclusions.
 
-## ADR-009 — OpenFreeMap now; Kenya PMTiles-on-R2 as the scale path
+## ADR-009 — CARTO Dark now; Kenya PMTiles-on-R2 as the scale path
 
-Zero-key basemap for the sprint; regional PMTiles extract on R2 (no tile server) for the
-offline/sovereignty story. Map is always an enhancement; list view is the fallback.
+The current demo uses CARTO Dark raster tiles through MapLibre because the public style is
+keyless, visually suited to the case-file HUD, and quick to ship. Attribution remains visible
+for OSM and CARTO. This is an online demo dependency, not an offline guarantee: the case file
+must remain usable as a list when tiles fail. The scale path is a Kenya-only PMTiles extract on
+R2, which reduces third-party dependency and supports regional caching.
+
+**Changes our mind:** CARTO availability/terms become unsuitable for the demo, attribution
+cannot be maintained, or the R2-hosted PMTiles path is not operationally simpler.
 
 ## ADR-010 — Subagents abandoned for research (2026-09-21)
 
 Spawned research agents had no network path (connection refused). Research was done direct.
 Not a product decision — recorded so we don't burn time retrying that lane today.
+
+## ADR-011 — Assertions are canonical; narratives are derived — 2026-09-21
+
+The product's durable object is a provenance-bearing assertion about an entity, not a document summary. Documents, web pages, photos, videos, and field reports are containers for evidence. Extractors stage typed candidates with exact source spans; deterministic reconciliation compares approved claims; the public narrative is rendered last and returns its basis claim IDs.
+
+This keeps claimed, observed, and supported states distinct, makes disagreement inspectable, and prevents an LLM from silently becoming the source of truth. **Changes our mind:** a future domain where claims cannot be independently cited, reviewed, or updated over time.
+
+## ADR-012 — Use maintained integrations for auth, model extraction, and object storage — 2026-09-21
+
+Better Auth owns sessions, anonymous reporting, reviewer roles, and magic links. The AI SDK/provider integration owns structured extraction and validation. Cloudflare R2 is accessed through the AWS S3-compatible SDK and presigned URLs. TanStack/IndexedDB and Workbox provide the PWA outbox and service-worker behavior. We do not replace these with custom authentication, storage signing, model protocols, or offline synchronization layers.
+
+**Changes our mind:** a platform constraint that a maintained integration cannot support the required provenance, security, or offline semantics.
+
+## ADR-013 — Varlock owns environment loading and validation — 2026-09-21
+
+Each runnable app owns a `.env.schema`; Bun's automatic dotenv loading is disabled with
+`env = false`, and Varlock loads/validates the environment before the app starts. This avoids
+silently mixing `.env`, `.env.local`, and environment-specific values across workspace packages.
+Run validation from the owning app directory with `bun x varlock load --show-all`.
+
+The Windows `UV_HANDLE_CLOSING` assertion can occur during Varlock/Bun shutdown and is a
+runtime/libuv issue, not a useful validation diagnosis. The validation output immediately above
+it remains authoritative. **Changes our mind:** a deployment platform that supplies a stronger,
+centrally managed secret/config contract without losing schema validation.
 
 ## Open questions (not yet decisions)
 

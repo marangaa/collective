@@ -9,7 +9,7 @@ decision changes, the docs change first (see `07-decisions.md`).
 | --- | --- |
 | [01 — Vision & case](01-vision.md) | The problem, the Nairobi case, design principles, track alignment, non-goals |
 | [02 — System architecture](02-architecture.md) | The five-stage pipeline, module/package map, deployment topology |
-| [03 — Data model](03-data-model.md) | Postgres schema v2, lifecycle rules, OCDS/FtM alignment, geospatial |
+| [03 — Data model](03-data-model.md) | PostgreSQL schema v3, lifecycle rules, OCDS/FtM alignment, geospatial |
 | [04 — AI pipeline](04-ai-pipeline.md) | Why an LLM exists here at all, ingestion taxonomy, extraction, validation, review gate, evals, cost |
 | [05 — UX & interface](05-ux.md) | Personas, the case-file interface (map × timeline × evidence), field-report flow, review console, offline behavior |
 | [06 — Infrastructure](06-infrastructure.md) | Neon, R2, maps, PWA realities, auth, env vars, free-tier budget |
@@ -22,4 +22,4 @@ The written summary asks for: track, information sources, trust/accuracy approac
 - **Track** → `01-vision.md`
 - **Information sources** → `04-ai-pipeline.md` § Ingestion taxonomy
 - **Trust & accuracy** → `03-data-model.md` (provenance model) + `04-ai-pipeline.md` (validation/review)
-- **AI usage (build + product)** → `04-ai-pipeline.md` + commit history + `AI-USAGE.md` (to be kept at repo root)
+- **AI usage (build + product)** → `04-ai-pipeline.md` + the repository's implementation history and provider configuration

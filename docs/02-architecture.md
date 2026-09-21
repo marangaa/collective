@@ -27,18 +27,19 @@ collective/
 │   │                 # span validation, review-queue writers) — runs as scripts/jobs
 │   ├── ui/           # shared shadcn primitives
 │   └── config/       # shared tsconfig
-├── corpus/           # local dev vault (mirrors R2 layout; gitignored artifacts)
+├── corpus/           # local source-artifact vault for pipeline development (gitignored artifacts)
 └── docs/             # this design set
 ```
 
-`packages/pipeline` is scaffolded with `bunx create-better-t-stack add --package pipeline`
-(BTS `add` supports workspace packages and addons; **auth is not an addon** — better-auth is
-wired manually, see `06-infrastructure.md`).
+`packages/pipeline` is a job-oriented workspace package. It reads and writes through storage and
+provider interfaces, while the API and database packages remain responsible for serving and
+persisting the public case file. Better Auth is wired manually in `apps/server` because it is an
+application boundary, not a shared data-layer concern.
 
 ## Data flow narratives
 
 **Ingestion run (per source document):**
-`fetch → sha256 → vault raw bytes (R2/local) → Gemini document understanding (chunked,
+`fetch → sha256 → vault raw bytes (R2 or the gitignored corpus during pipeline development) → Gemini document understanding (chunked,
 page-anchored) → claim candidates with spans → programmatic span validation (excerpt must
 fuzzy-match source text at stated page) → review queue (status pending) → human approve →
 claims published → reconciliation re-run → verdict snapshot appended.`
@@ -83,7 +84,7 @@ better-auth is simplest on Node/Bun. Hono stays Workers-compatible so this can m
 
 ## Hard boundaries (modularity contract)
 
-- `packages/db` knows tables, nothing else.
+- `packages/db` knows PostgreSQL tables and migrations, nothing else.
 - `packages/pipeline` writes claim *candidates*; it cannot publish (only the review gate can).
 - The reconciliation engine is **pure** (no I/O, no LLM calls) — testable, deterministic.
 - LLM access only through `packages/pipeline/extract/*` and `packages/api/lib/ai/*` behind a

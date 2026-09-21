@@ -47,10 +47,12 @@ Four projects, one case file, one unnamed-contractor thread the reconciliation e
 ## Design principles
 
 1. **Evidence before inference.** The system assembles, cross-references, and flags. It never
-   declares. Verdicts are three-valued — `corroborated / contradicted / unverifiable` — and
-   every one is one click from verbatim source excerpts.
-2. **Provenance or it didn't happen.** Every claim carries document + page + verbatim span.
-   Every document is content-addressed (SHA-256) with retrieval timestamps.
+   turns an inference into a source fact. Verdicts are explicit — `corroborated /
+   partially_corroborated / contradicted / unverifiable` — and every one is traceable to
+   approved claims and verbatim evidence.
+2. **Provenance or it didn't happen.** Every claim carries a provenance lane: document +
+   span, media artifact, or structured field report. Documents and media are retained and
+   content-addressed where available; derived interpretations never replace them.
 3. **"Unverifiable" is an answer.** Absence of evidence is a first-class, actionable output —
    it generates the exact next step (which document to demand, from whom, under which law).
 4. **Action is the output.** A case file ends in next steps: the institution, the pre-filled

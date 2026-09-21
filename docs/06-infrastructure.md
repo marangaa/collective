@@ -10,10 +10,10 @@
   GiST indexes on geography columns. Region: **eu-central-1** (closest well-supported region
   for Kenya; edge caching absorbs the rest).
 - Branches: `main` (prod) + `dev` branch for staging/migration testing — free, instant.
-- Drizzle: dialect `postgresql`, `@neondatabase/serverless` (HTTP/WS) for edge-compat
-  optionality, or `postgres.js` pooled on a long-lived server (our default on Railway/Fly).
-  PostGIS columns via drizzle custom types + `sql\`\`` helpers (ST_DWithin, ST_Contains,
-  ST_AsGeoJSON) until/unless first-class geography support lands.
+- Drizzle: dialect `postgresql` with `postgres.js` on the long-lived Bun API (the current
+  implementation). Neon pooled connections are appropriate for the API; use a direct/unpooled
+  connection for migrations when Neon provides both. The current schema stores `lat`/`lng` and
+  JSON boundaries; PostGIS is a planned deployment upgrade, not an active dependency.
 
 ## Object storage: Cloudflare R2
 
@@ -35,16 +35,21 @@ collective-vault/
 
 ## Maps
 
-- **Demo:** OpenFreeMap public instance — free, no key, no limits, OSM data, MapLibre
-  auto-attribution. Zero setup.
-- **Scale/offline path:** Kenya-only PMTiles extract (Protomaps/Planetiler build) served from
-  R2 via HTTP range requests — no tile server, R2 is Protomaps' recommended host. Regional
-  extract keeps the file small enough for aggressive service-worker caching around the case
-  area. Honest constraint: full offline maps on iOS are storage-limited; map remains an
-  enhancement, list is the fallback.
-- Frontend: `maplibre-gl` + `pmtiles` protocol (no react wrapper needed; thin internal hook).
+- **Current demo basemap:** CARTO Dark raster tiles, rendered by MapLibre GL. The tile URLs
+  are public and keyless, with OSM and CARTO attribution embedded in the map style. CARTO is
+  a tile provider; MapLibre is the browser renderer and interaction engine.
+- **Why CARTO for the demo:** the dark raster style fits the evidence/map HUD, requires no
+  application token in this prototype, and avoids making a map API key part of the browser
+  environment. It is still an online dependency; tile failure must never block the case-file
+  list and evidence views.
+- **Scale/offline path:** replace the public raster source with a Kenya-only PMTiles extract
+  (Protomaps/Planetiler build) served from R2 via HTTP range requests. This removes dependence
+  on a third-party tile endpoint and enables regional caching. Full offline maps remain an
+  enhancement; the facility list is the fallback.
+- Frontend: `maplibre-gl` owns the map canvas, controls, markers, and camera; the current
+  implementation uses a small internal style object rather than a React map wrapper.
 
-## Auth: better-auth (added manually — BTS `add` doesn't do auth)
+- **Auth: Better Auth (application boundary)**
 
 - **Anonymous plugin** for field reporters: authenticated sessions with zero PII; reporters
   can later link an email if they ever want to — corroboration without identity.
@@ -55,8 +60,10 @@ collective-vault/
 
 ## PWA realities
 
-- vite-plugin-pwa (already scaffolded) + custom service worker (`injectManifest`) for the
-  IndexedDB outbox sync.
+- vite-plugin-pwa with a custom `injectManifest` service worker for the IndexedDB outbox sync.
+  The worker serves the precached app shell for `/`, `/case/*`, `/report/*`, and `/review/*`
+  navigations, while `/trpc/*` and `/api/*` remain network-only. It is disabled during Vite
+  development so an old worker cannot mask route changes.
 - Background Sync API: Chromium only; **iOS Safari: no** → fallback = `online` event +
   app-open + visible manual retry.
 - Camera: `<input type="file" capture="environment">` — universal, no permissions dance.
@@ -69,9 +76,11 @@ collective-vault/
 
 ## Environment variables (varlock schemas stay the source of truth)
 
-`DATABASE_URL` (Neon pooled) · `GEMINI_API_KEY` · `R2_ACCOUNT_ID / R2_ACCESS_KEY_ID /
+`DATABASE_URL` (Neon/PostgreSQL) · `GEMINI_API_KEY` · `R2_ACCOUNT_ID / R2_ACCESS_KEY_ID /
 R2_SECRET_ACCESS_KEY / R2_BUCKET` · `BETTER_AUTH_SECRET` · `BETTER_AUTH_URL` ·
-`RESEND_API_KEY` · `VITE_SERVER_URL` · `VITE_MAP_STYLE_URL`
+`RESEND_API_KEY` · `VITE_SERVER_URL` · `VITE_MAP_STYLE_URL`. The authoritative required/optional
+status is defined by `apps/server/.env.schema` and `apps/web/.env.schema`; validate from each
+owning directory with `bun x varlock load --show-all`.
 
 ## Free-tier budget check (today)
 
