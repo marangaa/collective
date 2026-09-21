@@ -94,7 +94,8 @@ async function main() {
   console.log("→ inserting claims + links");
   const allClaims = [...seedClaimsPumwani, ...seedClaimsGumba, ...seedClaimsMamaLucy];
   for (const c of allClaims) {
-    const { key, projectKey, docKey, partyKey, excerpt, ...rest } = c;
+    const { key, projectKey, docKey, excerpt, ...rest } = c;
+    const partyKey = "partyKey" in c ? c.partyKey : null;
     const [row] = await db
       .insert(claims)
       .values({
