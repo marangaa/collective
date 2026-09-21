@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: collective
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: bun install --frozen-lockfile && bun run env:generate && bun run build --filter=server
+    startCommand: bun run apps/server/dist/index.mjs
+    healthCheckPath: /
+    autoDeployTrigger: commit
