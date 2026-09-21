@@ -12,12 +12,15 @@
     "env:generate": "varlock codegen"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.5",
     "@collective/api": "workspace:*",
     "@collective/db": "workspace:*",
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "catalog:",
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.13.7",
-    "libsql": "catalog:",
+
     "varlock": "catalog:",
     "zod": "catalog:"
   },

@@ -135,7 +135,26 @@ export async function ingestUrl(
 
 export async function ensureSource(
   db: Database,
-  input: { name: string; publisher: string; type: "audit" | "procurement" | "budget" | "press" | "news" | "community"; url: string; trustTier: "official" | "independent" | "community"; county?: string },
+  input: {
+    name: string;
+    publisher: string;
+    type:
+      | "audit"
+      | "procurement"
+      | "budget"
+      | "press"
+      | "news"
+      | "community"
+      | "official_database"
+      | "civil_society"
+      | "citizen_observation"
+      | "photo"
+      | "video"
+      | "social_post";
+    url: string;
+    trustTier: "official" | "independent" | "community";
+    county?: string;
+  },
 ): Promise<string> {
   const [existing] = await db.select().from(sources).where(eq(sources.name, input.name));
   if (existing) return existing.id;

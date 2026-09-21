@@ -6,6 +6,8 @@ import { z } from "zod";
  * the schema enforces the product's epistemics.
  */
 export const claimCandidateSchema = z.object({
+  subjectName: z.string().min(2).describe("Canonical or source name of the entity this assertion is about"),
+  objectName: z.string().nullable().describe("Named entity that is the object of the assertion, such as a contractor"),
   stage: z.enum(["planning", "tender", "award", "contract", "implementation", "completion"]),
   kind: z.enum([
     "budget_allocated",

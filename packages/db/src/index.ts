@@ -1,28 +1,23 @@
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import type { DatabaseConfig } from "./config";
 
 /**
- * Driver is chosen by DATABASE_URL scheme:
- *   postgres://…  → Neon (or any Postgres) via postgres.js
- *   pglite:./dir  → embedded PGlite for zero-dependency local dev
- *   file:./dir    → treated as PGlite data dir (legacy scaffold value)
+ * Create the server database connection.
+ *
+ * The application deliberately supports Neon/Postgres only. Use Neon’s pooled
+ * connection string for the long-lived API process; migrations should use the
+ * direct connection string when the deployment environment provides both.
  */
-export function createDb(env: DatabaseConfig) {
-  const url = env.DATABASE_URL;
-
-  if (url.startsWith("pglite:") || url.startsWith("file:")) {
-    const dataDir = url.replace(/^(pglite|file):/, "") || "./local.db";
-    const client = new PGlite(dataDir);
-    return drizzlePglite({ client }) as unknown as Database;
+export function createDb({ DATABASE_URL }: DatabaseConfig) {
+  if (!DATABASE_URL.startsWith("postgres://") && !DATABASE_URL.startsWith("postgresql://")) {
+    throw new Error("DATABASE_URL must be a PostgreSQL/Neon connection string");
   }
 
-  const client = postgres(url, { prepare: false });
-  return drizzlePostgres({ client });
+  const client = postgres(DATABASE_URL, { prepare: false });
+  return drizzle({ client });
 }
 
-export type Database = ReturnType<typeof drizzlePostgres>;
+export type Database = ReturnType<typeof drizzle>;
 

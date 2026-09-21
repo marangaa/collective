@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
 import { createContext } from "./context";
+import { auth } from "./auth";
 import { ENV } from "./env.server";
 
 const app = new Hono();
@@ -15,8 +16,12 @@ app.use(
   cors({
     origin: ENV.CORS_ORIGIN,
     allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   }),
 );
+
+app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
 
 app.use(
   "/trpc/*",

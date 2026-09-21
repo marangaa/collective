@@ -4,22 +4,35 @@
  *   bun run src/run.ts extract <documentId>          (requires GEMINI_API_KEY)
  *   bun run src/run.ts reconcile <caseSlug>
  *
- * DATABASE_URL: postgres (Neon) for prod, file:./local.db for offline dev.
+ * DATABASE_URL: Neon/PostgreSQL connection string loaded by Varlock.
  */
 import { createDb } from "@collective/db";
 import { migrateDb } from "@collective/db/migrate";
 import { eq } from "drizzle-orm";
 
-import { cases, documents, extractionRuns, ingestEvents, projects, sources } from "@collective/db/schema";
+import {
+  cases,
+  claimCandidates,
+  documentPages,
+  documents,
+  entities,
+  extractionRuns,
+  ingestEvents,
+  projectDetails,
+  siteDetails,
+  sources,
+} from "@collective/db/schema";
+import { recomputeForSubject } from "@collective/api/lib/loop";
 import { ingestUrl } from "./ingest";
 import { storageFromEnv } from "./storage";
 import { createGeminiExtractor } from "./extract/gemini";
 import { htmlToText } from "./extract/html";
 import { validateCandidate, candidateFingerprint } from "./extract/validate";
 import type { ClaimCandidate } from "./extract/schema";
-import { claims as claimsTable } from "@collective/db/schema";
+import { isProjectEntity, loadResolvableEntities, resolveEntityName, resolutionJson } from "./resolve";
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "file:./local.db";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error("DATABASE_URL is required; pipeline jobs run against Neon/PostgreSQL");
 const db = createDb({ DATABASE_URL });
 const storage = storageFromEnv();
 
@@ -59,8 +72,25 @@ async function cmdExtract(args: string[]) {
   // PDF magic bytes (%PDF) → native document understanding; HTML → text layer.
   const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
   const documentText = isPdf ? null : htmlToText(new TextDecoder().decode(bytes));
+  if (documentText) {
+    await db
+      .insert(documentPages)
+      .values({ documentId: doc.id, pageNumber: 1, text: documentText, charCount: documentText.length })
+      .onConflictDoNothing();
+    await db.update(documents).set({ pageCount: 1 }).where(eq(documents.id, doc.id));
+  }
 
-  const knownProjects = await db.select().from(projects);
+  const resolvableEntities = await loadResolvableEntities(db);
+  const knownProjects = await db
+    .select({
+      id: entities.id,
+      name: entities.canonicalName,
+      ward: siteDetails.ward,
+      subCounty: siteDetails.subCounty,
+    })
+    .from(entities)
+    .innerJoin(projectDetails, eq(entities.id, projectDetails.entityId))
+    .leftJoin(siteDetails, eq(entities.id, siteDetails.entityId));
 
   const extractor = createGeminiExtractor({ apiKey });
   let runStatus: "success" | "failed" | "partial" = "failed";
@@ -72,7 +102,10 @@ async function cmdExtract(args: string[]) {
       fileData: isPdf ? bytes : undefined,
       fileMime: "application/pdf",
       sourceTitle: doc.title,
-      knownProjects: knownProjects.map((p) => ({ name: p.name, hints: [p.ward ?? "", p.subCounty ?? ""] })),
+      knownProjects: knownProjects.map((p) => ({
+        name: p.name,
+        hints: [p.ward ?? "", p.subCounty ?? "", ...resolvableEntities.filter((entity) => entity.id === p.id).map((entity) => entity.name)],
+      })),
     });
 
     // validate + dedupe, then write survivors as review-pending candidates
@@ -81,6 +114,8 @@ async function cmdExtract(args: string[]) {
       const fp = candidateFingerprint(doc.id, c);
       if (seen.has(fp)) continue;
       seen.add(fp);
+      const subjectResolution = resolveEntityName(c.subjectName, resolvableEntities);
+      const objectResolution = resolveEntityName(c.objectName, resolvableEntities);
       if (documentText) {
         const outcome = validateCandidate(c, documentText);
         if (!outcome.valid) {
@@ -88,26 +123,35 @@ async function cmdExtract(args: string[]) {
           continue;
         }
       }
-      // Native-PDF path: excerpt can't be string-checked against page text
-      // without the text layer, so it lands flagged for the human review gate.
 
       candidateCount++;
       console.log(`  candidate: [${c.kind}] ${c.assertion.slice(0, 90)}…`);
-      await db.insert(claimsTable).values({
-        projectId: (await db.select().from(projects).limit(1))[0]!.id, // project resolution lands with the review console
-        documentId: doc.id,
-        stage: c.stage,
-        kind: c.kind,
+      await db.insert(claimCandidates).values({
+        subjectNameRaw: c.subjectName,
+        subjectEntityId: subjectResolution.entityId,
+        predicate: c.kind === "award_made" ? "contract_awarded_to" : c.kind,
+        objectNameRaw: c.objectName,
+        objectEntityId: objectResolution.entityId,
+        valueNumeric: c.amountKes ? String(c.amountKes) : null,
+        valueStatus: c.observedStatus,
+        valueDate: c.eventDate,
         assertion: c.assertion,
-        amountKes: c.amountKes,
-        observedStatus: c.observedStatus,
-        eventDate: c.eventDate,
+        stage: c.stage,
         span: c.span,
-        extractionMethod: "llm",
-        reviewState: "pending",
+        extractor: "llm",
+        model: usage.model,
+        promptVersion: "v2-assertion-graph",
+        status: subjectResolution.entityId && isProjectEntity(subjectResolution.entityId, resolvableEntities)
+          ? "pending"
+          : "needs_review",
+        validation: { spanVerified: Boolean(documentText), pageExists: c.span.page == null || c.span.page === 1 },
+        resolution: resolutionJson(subjectResolution, objectResolution),
+        fingerprint: fp,
+        documentId: doc.id,
       });
     }
     runStatus = candidateCount > 0 ? "success" : "partial";
+    await db.update(documents).set({ extractionState: candidateCount > 0 ? "extracted" : "failed" }).where(eq(documents.id, doc.id));
 
     await db.insert(extractionRuns).values({
       documentId: doc.id,
@@ -121,6 +165,7 @@ async function cmdExtract(args: string[]) {
     });
     console.log(`✓ extraction ${runStatus}: ${candidateCount} candidates (usage: ${usage.tokensIn}/${usage.tokensOut} tokens, ${usage.durationMs}ms)`);
   } catch (e) {
+    await db.update(documents).set({ extractionState: "failed" }).where(eq(documents.id, doc.id));
     await db.insert(extractionRuns).values({
       documentId: doc.id,
       extractor: "llm",
@@ -133,9 +178,16 @@ async function cmdExtract(args: string[]) {
 async function cmdReconcile(args: string[]) {
   const [slug] = args;
   if (!slug) throw new Error("usage: reconcile <caseSlug>");
-  console.log(`reconcile ${slug}: runs the deterministic engine in packages/api (bin pending — engine is called by seed and by the review-gate webhooks)`);
-  void cases;
-  void claimsTable;
+  const [caseRow] = await db.select().from(cases).where(eq(cases.slug, slug));
+  if (!caseRow) throw new Error(`case ${slug} not found`);
+  const projectRows = await db
+    .select({ entityId: projectDetails.entityId })
+    .from(projectDetails)
+    .where(eq(projectDetails.caseId, caseRow.id));
+  for (const project of projectRows) {
+    const result = await recomputeForSubject(db, project.entityId);
+    console.log(`✓ ${project.entityId}: ${result.verdicts.length} verdicts, ${result.requests.length} open requests`);
+  }
   void ingestEvents;
 }
 
@@ -151,7 +203,7 @@ async function main() {
     console.error("usage: run.ts <ingest|extract|reconcile> …");
     process.exit(1);
   }
-  await migrateDb(db, DATABASE_URL);
+  await migrateDb(db);
   await commands[cmd](rest);
   process.exit(0);
 }

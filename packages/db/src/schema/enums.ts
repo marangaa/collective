@@ -7,6 +7,12 @@ export const sourceType = pgEnum("source_type", [
   "press",
   "news",
   "community",
+  "official_database",
+  "civil_society",
+  "citizen_observation",
+  "photo",
+  "video",
+  "social_post",
 ]);
 
 export const trustTier = pgEnum("trust_tier", ["official", "independent", "community"]);

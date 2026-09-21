@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.76",
+    "@aws-sdk/client-s3": "^3.1136.0",
+    "@collective/api": "workspace:*",
     "@collective/db": "workspace:*",
     "ai": "^7.0.107",
     "drizzle-orm": "1.0.0-rc.4",

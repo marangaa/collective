@@ -28,6 +28,8 @@ const SYSTEM = `You extract verifiable factual claims from Kenyan public-records
 
 Rules:
 - Extract only claims supported by the text. Never infer beyond it.
+- subjectName must be the exact project, site, organization, or institution name used in the source.
+- objectName must be the exact named entity when the predicate points to another entity; otherwise null.
 - Each claim MUST carry span.excerpt: a VERBATIM quote from the source (copy exactly).
 - If the excerpt spans a specific page you know, set span.page; otherwise null.
 - Amounts: parse to integer KES. "Sh869 million" → 869000000.
@@ -55,7 +57,7 @@ export function createGeminiExtractor(opts: { apiKey: string; model?: string }):
         input.documentText
           ? `Document text:\n\n${input.documentText.slice(0, 400_000)}`
           : "Document attached as PDF.",
-        `Extract up to ${input.maxCandidates ?? 25} claim candidates as structured output.`,
+        `Extract up to ${input.maxCandidates ?? 25} claim candidates as structured output. Include subjectName and objectName for every candidate.`, 
       ]
         .filter(Boolean)
         .join("\n\n");

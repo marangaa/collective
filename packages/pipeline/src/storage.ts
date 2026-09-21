@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import path from "node:path";
 
 /**
@@ -56,6 +57,8 @@ export class LocalFsDriver implements StorageDriver {
 /** Prod driver: any S3-compatible endpoint (Cloudflare R2). Wired with aws4fetch
  *  at deploy time — same interface, swap by env (see docs/06). */
 export class S3Driver implements StorageDriver {
+  private readonly client: S3Client;
+
   constructor(
     private opts: {
       endpoint: string;
@@ -63,24 +66,41 @@ export class S3Driver implements StorageDriver {
       accessKeyId: string;
       secretAccessKey: string;
     },
-  ) {}
-
-  async put(_key: string, _bytes: Uint8Array): Promise<void> {
-    void this.opts;
-    throw new Error("S3Driver is wired at deploy time (aws4fetch) — see docs/06-infrastructure.md");
+  ) {
+    this.client = new S3Client({
+      region: "auto",
+      endpoint: opts.endpoint,
+      credentials: { accessKeyId: opts.accessKeyId, secretAccessKey: opts.secretAccessKey },
+    });
   }
 
-  async get(_key: string): Promise<Uint8Array | null> {
-    throw new Error("S3Driver is wired at deploy time (aws4fetch) — see docs/06-infrastructure.md");
+  async put(key: string, bytes: Uint8Array): Promise<void> {
+    await this.client.send(new PutObjectCommand({ Bucket: this.opts.bucket, Key: key, Body: bytes }));
   }
 
-  async exists(_key: string): Promise<boolean> {
-    throw new Error("S3Driver is wired at deploy time (aws4fetch) — see docs/06-infrastructure.md");
+  async get(key: string): Promise<Uint8Array | null> {
+    try {
+      const response = await this.client.send(new GetObjectCommand({ Bucket: this.opts.bucket, Key: key }));
+      return response.Body ? new Uint8Array(await response.Body.transformToByteArray()) : null;
+    } catch (error) {
+      if (error instanceof Error && /NoSuchKey|NotFound|404/i.test(error.name + error.message)) return null;
+      throw error;
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.opts.bucket, Key: key }));
+      return true;
+    } catch (error) {
+      if (error instanceof Error && /NotFound|404/i.test(error.name + error.message)) return false;
+      throw error;
+    }
   }
 }
 
 export function storageFromEnv(): StorageDriver {
-  const endpoint = process.env.R2_ENDPOINT;
+  const endpoint = process.env.R2_ENDPOINT ?? (process.env.R2_ACCOUNT_ID ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : undefined);
   if (endpoint && process.env.R2_BUCKET && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) {
     return new S3Driver({
       endpoint,

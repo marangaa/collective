@@ -8,7 +8,7 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "db:local": "echo \"PGlite is embedded — set DATABASE_URL=pglite:./local.db and run the app\"",
+
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate:deploy": "drizzle-kit migrate",
@@ -16,7 +16,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.3.8",
+
     "drizzle-orm": "1.0.0-rc.4",
     "postgres": "^3.4.5",
     "zod": "catalog:"

@@ -22,7 +22,6 @@ import {
   observedStatus,
   reportChannel,
 } from "./enums";
-import { documents } from "./registry";
 
 /**
  * Field reports — structured community observations. The "crowd as sensors":

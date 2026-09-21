@@ -51,6 +51,26 @@ export const documents = pgTable(
   (t) => [uniqueIndex("documents_sha256_idx").on(t.sha256), index("documents_source_idx").on(t.sourceId)],
 );
 
+/** Normalized text pages. Original bytes remain authoritative in the vault. */
+export const documentPages = pgTable(
+  "document_pages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id),
+    pageNumber: integer("page_number").notNull(),
+    text: text("text").notNull(),
+    charCount: integer("char_count").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("document_pages_unique_idx").on(t.documentId, t.pageNumber),
+    index("document_pages_document_idx").on(t.documentId),
+  ],
+);
+
 /** Kenya administrative geography. boundary is GeoJSON (rendered natively by MapLibre);
  *  PostGIS geography(MultiPolygon) upgrade happens on Neon deploy — see docs/07 ADR-001. */
 export const areas = pgTable("areas", {

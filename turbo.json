@@ -33,10 +33,7 @@
       "cache": false,
       "persistent": true
     },
-    "db:local": {
-      "cache": false,
-      "persistent": true
-    }
+
   },
   "globalEnv": [
     "CI",
