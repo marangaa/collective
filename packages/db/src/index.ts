@@ -1,15 +1,28 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 import type { DatabaseConfig } from "./config";
-import { relations } from "./relations";
 
+/**
+ * Driver is chosen by DATABASE_URL scheme:
+ *   postgres://…  → Neon (or any Postgres) via postgres.js
+ *   pglite:./dir  → embedded PGlite for zero-dependency local dev
+ *   file:./dir    → treated as PGlite data dir (legacy scaffold value)
+ */
 export function createDb(env: DatabaseConfig) {
-  const client = createClient({
-    url: env.DATABASE_URL,
-  });
+  const url = env.DATABASE_URL;
 
-  return drizzle({ client, relations });
+  if (url.startsWith("pglite:") || url.startsWith("file:")) {
+    const dataDir = url.replace(/^(pglite|file):/, "") || "./local.db";
+    const client = new PGlite(dataDir);
+    return drizzlePglite({ client }) as unknown as Database;
+  }
+
+  const client = postgres(url, { prepare: false });
+  return drizzlePostgres({ client });
 }
 
-export type Database = ReturnType<typeof createDb>;
+export type Database = ReturnType<typeof drizzlePostgres>;
+

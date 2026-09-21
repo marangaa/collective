@@ -3,11 +3,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "db:local": "turso dev --db-file local.db",
+    "db:local": "echo \"PGlite is embedded — set DATABASE_URL=pglite:./local.db and run the app\"",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate:deploy": "drizzle-kit migrate",
@@ -15,9 +16,9 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@libsql/client": "0.18.0",
+    "@electric-sql/pglite": "^0.3.8",
     "drizzle-orm": "1.0.0-rc.4",
-    "libsql": "catalog:",
+    "postgres": "^3.4.5",
     "zod": "catalog:"
   },
   "devDependencies": {

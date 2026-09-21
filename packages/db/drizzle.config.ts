@@ -4,7 +4,7 @@ import "varlock/auto-load";
 export default defineConfig({
   schema: "./src/schema/index.ts",
   out: "./src/migrations",
-  dialect: "turso",
+  dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL || "",
   },
