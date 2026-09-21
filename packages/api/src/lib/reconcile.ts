@@ -53,17 +53,47 @@ function isStalledLike(status: string | null) {
 
 const kes = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
 
+/**
+ * Claims linked `same_finding` are echoes of one underlying finding (e.g. media
+ * republishing an audit report verbatim). Independence is counted over clusters,
+ * not claims — an echo is not a source.
+ */
+function buildClusters(
+  ids: string[],
+  links: { fromClaimId: string; toClaimId: string; relation: string }[],
+) {
+  const parent = new Map<string, string>(ids.map((i) => [i, i]));
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  for (const l of links) {
+    if (l.relation !== "same_finding") continue;
+    if (!parent.has(l.fromClaimId) || !parent.has(l.toClaimId)) continue;
+    parent.set(find(l.fromClaimId), find(l.toClaimId));
+  }
+  return (claimId: string) => find(claimId);
+}
+
 export function reconcileProject(input: {
   projectId: string;
   claims: EnrichedClaim[];
   reports: ReportRow[];
+  links: { fromClaimId: string; toClaimId: string; relation: string }[];
   now: Date;
 }): { verdicts: VerdictDraft[]; timeline: TimelineEvent[] } {
-  const { claims, reports, now } = input;
+  const { claims, reports, links, now } = input;
   const verdicts: VerdictDraft[] = [];
 
+  const clusterOf = buildClusters(
+    claims.map((c) => c.id),
+    links,
+  );
   const byKind = (kind: ClaimRow["kind"]) => claims.filter((c) => c.kind === kind);
-  const tiersOf = (cs: EnrichedClaim[]) => new Set(cs.map((c) => c.trustTier));
+  /** Independent evidence = distinct same_finding clusters (an echo is not a source). */
+  const independentCount = (cs: EnrichedClaim[]) => new Set(cs.map((c) => clusterOf(c.id))).size;
 
   // ── budget ────────────────────────────────────────────────────────────
   const budgetClaims = byKind("budget_allocated");
@@ -80,13 +110,14 @@ export function reconcileProject(input: {
   // ── award ─────────────────────────────────────────────────────────────
   const awardClaims = byKind("award_made");
   if (awardClaims.length > 0) {
-    const independent = tiersOf(awardClaims).size >= 2;
+    const independent = independentCount(awardClaims) >= 2;
     const amounts = new Set(
       awardClaims.filter((c) => c.amountKes != null).map((c) => c.amountKes),
     );
     const gaps: string[] = [];
     if (awardClaims.every((c) => !c.partyId || c.partyId === null)) gaps.push("contractor_identity");
     if (awardClaims.every((c) => !c.eventDate)) gaps.push("award_date");
+    if (!independent) gaps.push("independent_award_record");
     verdicts.push({
       aspect: "award",
       verdict:
@@ -96,8 +127,8 @@ export function reconcileProject(input: {
             ? "corroborated"
             : "partially_corroborated",
       summary: independent
-        ? `Award of ${awardClaims[0]!.amountKes != null ? kes(awardClaims[0]!.amountKes) : "undisclosed value"} is reported by ${tiersOf(awardClaims).size} independent source tiers.`
-        : "Award is documented by a single source tier only.",
+        ? `Award of ${awardClaims[0]!.amountKes != null ? kes(awardClaims[0]!.amountKes) : "undisclosed value"} is established by ${independentCount(awardClaims)} independent findings.`
+        : "Award traces to a single underlying finding — the original tender/award record is not in the ingested corpus.",
       basisClaimIds: awardClaims.map((c) => c.id),
       gaps,
     });
@@ -106,14 +137,16 @@ export function reconcileProject(input: {
   // ── payments ──────────────────────────────────────────────────────────
   const paymentClaims = byKind("payment_made");
   const inspections = [...byKind("inspection_finding"), ...byKind("delivery_observed")];
-  const stalledFindings = inspections.filter((c) => isStalledLike(c.observedStatus));
+  // Any claim carrying a stalled-like observation is delivery evidence,
+  // regardless of kind — e.g. a payment claim stating "stalled after payment".
+  const stalledFindings = claims.filter((c) => isStalledLike(c.observedStatus));
   const completionClaims = byKind("completion_claimed");
   const totalPaid = paymentClaims.reduce((s, c) => s + (c.amountKes ?? 0), 0);
 
   if (paymentClaims.length > 0) {
     verdicts.push({
       aspect: "payments",
-      verdict: tiersOf(paymentClaims).size >= 2 ? "corroborated" : "partially_corroborated",
+      verdict: independentCount(paymentClaims) >= 2 ? "corroborated" : "partially_corroborated",
       summary: `Payments totaling ${kes(totalPaid)} are documented across ${new Set(paymentClaims.map((c) => c.documentId)).size} document(s).`,
       basisClaimIds: paymentClaims.map((c) => c.id),
       gaps: paymentClaims.every((c) => !c.eventDate) ? ["payment_schedule"] : [],
@@ -140,7 +173,7 @@ export function reconcileProject(input: {
   } else if (stalledFindings.length > 0) {
     verdicts.push({
       aspect: "delivery",
-      verdict: tiersOf(stalledFindings).size >= 2 ? "corroborated" : "partially_corroborated",
+      verdict: independentCount(stalledFindings) >= 2 ? "corroborated" : "partially_corroborated",
       summary: "The record consistently indicates the project was not delivered.",
       basisClaimIds: stalledFindings.map((c) => c.id),
       gaps: ["current_status"],

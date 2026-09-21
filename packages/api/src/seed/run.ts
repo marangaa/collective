@@ -144,6 +144,7 @@ async function main() {
   }
 
   console.log("→ reconciling (engine, deterministic)");
+  const linkRows = await db.select().from(claimLinks);
   const now = new Date();
   for (const p of seedProjects) {
     const projectId = id.get(`project:${p.key}`)!;
@@ -163,7 +164,7 @@ async function main() {
       .from(fieldReports)
       .where(eq(fieldReports.projectId, projectId));
 
-    const { verdicts: drafts } = reconcileProject({ projectId, claims: rows, reports: reportRows, now });
+    const { verdicts: drafts } = reconcileProject({ projectId, claims: rows, reports: reportRows, links: linkRows, now });
     const hash = inputsHash(rows.map((c) => c.id), reportRows.map((r) => r.id));
     for (const v of drafts) {
       await db.insert(verdicts).values({ projectId, ...v, inputsHash: hash });
