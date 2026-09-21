@@ -11,40 +11,51 @@ type Report = {
   photoKeys?: unknown;
 };
 
-/** Community ground truth — observations, never verdicts. Demo data is flagged. */
+/** Community ground observations. Plain language, strict zero-radius styling. */
 export function ReportList({ reports }: { reports: Report[] }) {
   if (reports.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No community reports yet. If you know this place, what you see matters.
-      </p>
+      <div className="border border-neutral-900 bg-neutral-950/40 p-4 text-xs text-neutral-400 font-mono">
+        No observations yet. If you have visited this site, add what you saw.
+      </div>
     );
   }
+
   return (
-    <ul className="space-y-2">
+    <div className="space-y-2">
       {reports.map((r) => (
-        <li key={r.id} className="rounded-lg border bg-card/60 p-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium">
-              {OBSERVED_LABELS[r.observedStatus] ?? r.observedStatus}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              observed {fmtDate(r.capturedAt ?? r.submittedAt)}
-            </span>
-            {r.corroborationState === "corroborated" && (
-              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-400">
-                corroborated
+        <div key={r.id} className="border border-neutral-800 bg-black p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+            <div className="flex items-center gap-2">
+              <span className="border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-white font-semibold">
+                {OBSERVED_LABELS[r.observedStatus] ?? r.observedStatus}
               </span>
-            )}
-            {r.isDemo && (
-              <span className="rounded bg-zinc-500/15 px-1.5 py-0.5 text-[11px] text-zinc-400">
-                demo submission
+              <span className="text-neutral-400">
+                Seen {fmtDate(r.capturedAt ?? r.submittedAt)}
               </span>
-            )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {r.corroborationState === "corroborated" && (
+                <span className="border border-emerald-800 bg-emerald-950/40 text-emerald-400 px-1.5 py-0.5">
+                  Matches 2+ other observations
+                </span>
+              )}
+              {r.isDemo && (
+                <span className="border border-neutral-800 bg-neutral-900 text-neutral-400 px-1.5 py-0.5">
+                  Example report
+                </span>
+              )}
+            </div>
           </div>
-          {r.comment && <p className="mt-1.5 text-sm text-muted-foreground">{r.comment}</p>}
-        </li>
+
+          {r.comment && (
+            <p className="mt-2 text-neutral-200 text-xs leading-relaxed font-sans border-l-2 border-neutral-800 pl-2.5">
+              {r.comment}
+            </p>
+          )}
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }

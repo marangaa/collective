@@ -8,29 +8,42 @@ type Verdict = {
   computedAt?: string | Date;
 };
 
-/** The five-aspect verdict strip — the case's epistemic status at a glance.
- *  Colors are semantic here and decorative nowhere else. */
+/** The 5-aspect status strip — the epistemic reality of the public record at a glance.
+ *  Strict monotone layout with surgical status indicators. Zero rounded corners. */
 export function VerdictStrip({ verdicts }: { verdicts: Verdict[] }) {
   const order = ["budget", "award", "payments", "delivery", "current_state"];
   const sorted = [...verdicts].sort((a, b) => order.indexOf(a.aspect) - order.indexOf(b.aspect));
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <div className="grid grid-cols-2 md:grid-cols-5 border border-neutral-800 bg-black divide-x divide-y md:divide-y-0 divide-neutral-800">
       {sorted.map((v) => {
         const meta = VERDICT_META[v.verdict as VerdictValue] ?? VERDICT_META.unverifiable;
         const gaps = Array.isArray(v.gaps) ? (v.gaps as string[]) : [];
+
         return (
           <div
             key={v.aspect}
-            title={`${v.summary}${gaps.length ? `\nMissing: ${gaps.join(", ")}` : ""}`}
-            className={`rounded-lg border px-3 py-2 ${meta.classes}`}
+            className="flex flex-col justify-between p-3 bg-neutral-950/60 hover:bg-neutral-900/40 transition-colors"
           >
-            <div className="text-[11px] uppercase tracking-wide opacity-70">
-              {ASPECT_LABELS[v.aspect] ?? v.aspect}
+            <div>
+              <div className="flex items-center justify-between gap-1 text-[10px] font-mono text-neutral-400">
+                <span>{ASPECT_LABELS[v.aspect] ?? v.aspect}</span>
+                <span className="h-1.5 w-1.5" style={{ backgroundColor: meta.dot }} />
+              </div>
+
+              <div className="mt-2 text-xs font-semibold tracking-tight text-white flex items-center gap-1.5">
+                <span style={{ color: meta.dot }}>{meta.label}</span>
+              </div>
+
+              <p className="mt-1 text-[11px] leading-relaxed text-neutral-400 line-clamp-2" title={v.summary}>
+                {v.summary}
+              </p>
             </div>
-            <div className="text-sm font-semibold">{meta.label}</div>
+
             {gaps.length > 0 && (
-              <div className="mt-0.5 text-[11px] opacity-70">missing: {gaps.length}</div>
+              <div className="mt-2 pt-1.5 border-t border-neutral-900 text-[10px] font-mono text-neutral-400">
+                Missing {gaps.length} record{gaps.length === 1 ? "" : "s"}
+              </div>
             )}
           </div>
         );

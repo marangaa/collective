@@ -1,1 +1,8 @@
 @import "@collective/ui/globals.css";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* Ensure maplibre canvas takes 100% of container */
+.maplibregl-map {
+  width: 100% !important;
+  height: 100% !important;
+}

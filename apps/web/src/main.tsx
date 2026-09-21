@@ -3,8 +3,15 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
 import Loader from "./components/loader";
+import { flushReportOutbox } from "./utils/outbox";
 import { routeTree } from "./routeTree.gen";
 import { queryClient, trpc } from "./utils/trpc";
+
+void flushReportOutbox();
+window.addEventListener("online", () => void flushReportOutbox());
+navigator.serviceWorker?.addEventListener("message", (event) => {
+  if (event.data?.type === "collective-report-sync") void flushReportOutbox();
+});
 
 const router = createRouter({
   routeTree,

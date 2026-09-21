@@ -12,6 +12,11 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  // MapLibre ships its worker as a separate ESM module. Let the browser load
+  // the package instead of asking Vite's dependency optimizer to prebundle it.
+  optimizeDeps: {
+    exclude: ["maplibre-gl"],
+  },
   plugins: [
     varlockVitePlugin({ ssrInjectMode: "auto-load" }),
     tailwindcss(),
@@ -21,8 +26,11 @@ export default defineConfig({
     }),
     react(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
-      workbox: { globPatterns: ["**/*.{js,css,html,png,svg,ico}"] },
+      injectManifest: { globPatterns: ["**/*.{js,css,html,png,svg,ico}"] },
       manifest: {
         name: "collective",
         short_name: "collective",
@@ -30,7 +38,9 @@ export default defineConfig({
         theme_color: "#0c0c0c",
       },
       pwaAssets: { disabled: false, config: true },
-      devOptions: { enabled: true },
+      // Keep the service worker out of Vite development; stale workers can
+      // intercept document navigations while routes and the API are changing.
+      devOptions: { enabled: false },
     }),
   ],
 });
