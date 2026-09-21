@@ -5,6 +5,6 @@ services:
     region: frankfurt
     plan: free
     buildCommand: bun install --frozen-lockfile && bun run env:generate && bun run build --filter=server
-    startCommand: bun run apps/server/dist/index.mjs
+    startCommand: bun x varlock run --path apps/server -- bun run apps/server/dist/index.mjs
     healthCheckPath: /
     autoDeployTrigger: commit
