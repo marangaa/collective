@@ -1,80 +1,52 @@
-# 04 — AI pipeline
+# 04, AI pipeline
 
-## Why an LLM pipeline exists here at all
+## Why a model is involved at all
 
-Because **the public record is prose, and reconciliation needs structure.**
+Because the public record is written in prose, and comparing claims needs structure.
 
-The Auditor-General does not publish rows; she publishes a 500-page PDF containing sentences
-like *"the contractor had not been on site since March 2023"*. A tender award is an HTML
-table from 2016. A completion claim is a speech. A database cannot compare sentences — it can
-only compare **typed values**: amounts, dates, statuses, parties.
+The Auditor-General does not publish tidy rows. She publishes a 500 page PDF with sentences like "the contractor had not been on site since March 2023". A tender award is an old HTML table. A completion claim is something someone said at an event. A database cannot compare sentences. It can only compare typed values: amounts, dates, statuses, names.
 
-So the LLM has exactly one job: **unstructured document → typed claims, each bolted to a
-verbatim evidence span.** It is the universal adapter between how governments publish and how
-evidence must be structured to be cross-examined.
+So the model has exactly one job: turn an unstructured document into typed claims, each tied to an exact quote. It bridges how governments publish and how evidence has to look before you can cross-examine it.
 
-Just as important is what the LLM **never** does:
+What the model never does matters more:
 
-- It never decides a verdict. Reconciliation is deterministic rules over claims.
-- It never writes to the public case file. A human review gate publishes.
-- It never asserts beyond the span. No span → the candidate is discarded.
-- It never sees field-reporter data (no PII in prompts, ever).
+- It never decides a verdict. Verdicts come from plain rules run over claims.
+- It never writes to the public case file. A person publishes.
+- It never claims more than its quote supports. No quote, no candidate.
+- It never sees reporter data. No personal details go into prompts, ever.
 
-This division is the product's epistemics made architectural: **AI proposes, rules reconcile,
-humans approve.** In a tool whose subject is trust, that sentence is the whole game.
+AI proposes, rules reconcile, people approve. For a tool about trust, that sentence carries the whole design.
 
-## What exactly we ingest (taxonomy)
+## What we take in
 
-| Source type | Examples (Kenya) | Format | What we extract |
-| --- | --- | --- | --- |
-| Official audits | OAG Green Books (county executives, FY22/23→FY24/25) | PDF, ~500pp | inspection findings, stalled/abandoned status, amounts, dates |
-| Budget docs | County budget estimates; OCOB implementation reports | PDF | allocations per project, execution %, fiscal year |
-| Procurement | tenders.go.ke notices/awards; county tender pages | HTML/PDF | tender no., contractor, award amount, dates |
-| Official claims | County press releases, project dashboards, speeches | HTML/PDF | completion claims, milestone announcements |
-| Independent media | The Star, NTV, Willow Health Media, Eastleigh Voice | HTML | site-visit findings, photos, contradictions |
-| Community | Field reports from the PWA | structured | **bypasses LLM entirely** — already typed |
+- Official audits: the OAG Green Books for county executives, FY22/23 onward. PDFs, around 500 pages. We pull inspection findings, stalled or abandoned status, amounts, dates.
+- Budget documents: county estimates and controller of budget reports. PDFs. Allocations per project, spend percentages, financial year.
+- Procurement: tender notices and awards from the tender portal and county pages. HTML and PDF. Tender numbers, contractors, award amounts, dates.
+- Official claims: county press releases, project dashboards, speeches. HTML and PDF. Completion claims and milestone announcements.
+- Independent media: The Star, NTV, Willow Health Media, Eastleigh Voice. Web pages. Site visits, photos, contradictions.
+- Community: field reports from the app. These skip the model completely because they arrive structured already.
 
-Reference data (institutions directory, ward/county boundaries) is curated, not extracted.
+Reference data like the office directory and ward boundaries is curated by hand, not extracted.
 
-## Pipeline stages
+## The stages
 
-1. **Fetch & vault.** Download → SHA-256 → immutable raw object (R2 / local `corpus/`).
-   Re-fetch with a new hash = new document version (`supersedes_id`).
-2. **Read.** Gemini document understanding (native-vision PDF, ≤1000 pages / 50MB,
-   ~258 tokens/page; scanned pages work via vision — no separate OCR stack). Files API for
-   large docs; inline for small ones. Chunk by chapter/page-range; page anchors preserved.
-3. **Extract.** AI SDK v6: `generateText` + `Output.object({ schema })` (zod). One call per
-   chunk returns claim candidates: `kind, stage, assertion, amountKes, eventDate,
-   partyLabel, span{page, excerpt}`. Flash-class model for bulk; Pro-class for hard pages.
-   Bulk corpora can go through the Gemini Batch API (cheaper, 24h) — ingestion is not
-   latency-sensitive.
-4. **Validate (programmatic, no LLM).** For every candidate: the excerpt must fuzzy-match
-   the stated page's text; the page must exist; amounts/dates must parse. One repair retry,
-   else quarantine. Everything logged to `extraction_runs` (model, prompt version, tokens,
-   cost) — our own AI audit trail, reused verbatim in the hackathon written summary.
-5. **Resolve entities.** Match candidates to projects/parties: deterministic keys first
-   (tender numbers, facility names), LLM-merge proposals second, human confirms.
-6. **Review gate.** Reviewer console: candidate ↔ source page side by side;
-   approve / edit / reject. Only `approved` claims are public.
-7. **Reconcile & snapshot.** Deterministic engine → verdicts + gaps (append-only).
+1. Fetch and store. Download the file, hash it, keep the raw copy (R2, or the local `corpus/` folder during development). If the same URL changes and the hash differs, that is a new document version pointing back at the old one.
+2. Read. Gemini reads the PDF as a document (up to 1000 pages or 50MB, about 258 tokens a page; scanned pages work through vision, so no separate OCR setup). Big files go through the Files API, small ones inline. We chunk by chapter or page range and keep page numbers.
+3. Extract. One call per chunk through the AI SDK returns claim candidates: kind, stage, the assertion in words, amount in KSh, date, party name, and the quote with its page. A fast model handles bulk; a stronger one handles hard pages. Big backfills can use the Batch API, which is cheaper and takes up to a day, since ingestion is never urgent.
+4. Check with code, not with the model. Each candidate's quote must match the stated page's text closely, the page must exist, amounts and dates must parse. One repair try, then quarantine. Every run is logged (model, prompt version, tokens, cost). That log is our own audit trail for the AI, and the hackathon writeup quotes it directly.
+5. Match names. Candidates are matched to projects and parties, exact keys first (tender numbers, facility names), model suggestions second, a person confirms.
+6. Review. A reviewer sees the candidate next to the source page and approves, edits, or rejects. Only approved claims go public.
+7. Reconcile and snapshot. The plain engine turns approved claims into verdicts and open gaps, stored as new rows.
 
-## Where else AI appears in the product
+## Where else the model shows up
 
-- **Plain-language & Swahili summaries** of approved claims (display layer; originals always
-  one tap away — translation can never become the only copy).
-- **ATI letter drafting**: template + LLM polish, with the cited gaps embedded. Human sends.
-- **Contradiction candidacy**: LLM flags candidate claim pairs; rules confirm; humans see the
-  reasoning. Speeds up linking, never decides it.
-- Stretch: **"ask this case file"** Q&A constrained to approved claims with mandatory citation
-  chips. Cut first if time tightens.
+- Plain language and Swahili summaries of approved claims. The original is always one tap away. A translation is never the only copy.
+- Drafting access to information letters: a template plus model polish, with the cited gaps baked in. A person sends it.
+- Spotting possible contradictions: the model suggests claim pairs, rules confirm, people see the reasoning. It speeds up linking without deciding anything.
+- Later, maybe: asking the case file questions, answered only from approved claims with quote chips attached. First thing to cut if time runs short.
 
-## Quality & cost discipline
+## Quality and cost
 
-- **Gold set**: ~30 hand-verified claims from the FY22/23 Nairobi chapter; measure
-  precision/recall on kind, amount, date, span validity per prompt version. Prompts are
-  versioned (`prompt_version` on every run).
-- **Cost reality**: the demo corpus is ~4 large PDFs + ~10 articles ≈ a few hundred thousand
-  tokens — comfortably inside the Gemini free tier (per-project RPM/RPD). `extraction_runs`
-  proves it with real numbers.
-- **Failure posture**: a failed extraction leaves the document vaulted and marked `failed`;
-  the case file simply shows "not yet processed". The system degrades honestly.
+- A gold set of about 30 hand checked claims from the FY22/23 Nairobi chapter measures each prompt version on kind, amount, date, and quote validity. Prompts carry version numbers on every run.
+- The demo set is around 4 big PDFs plus 10 articles, a few hundred thousand tokens, inside the Gemini free tier. The run log shows the real numbers.
+- If extraction fails, the document stays stored and marked failed, and the case file says "not yet processed". The system degrades by telling the truth.

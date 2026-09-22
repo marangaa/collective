@@ -1,100 +1,87 @@
-# 07 — Decisions (ADRs)
+# 07, Decisions
 
-One line each on *what would change our mind*. Newest last. Amend by appending, not editing.
+Each entry says what would change our mind. Newest goes last. To amend, append, do not edit.
 
-## ADR-001 — Postgres (Neon) over SQLite/Turso — 2026-09-21
+## ADR-001, Postgres on Neon instead of SQLite or Turso, 2026-09-21
 
-**Decision:** migrate `packages/db` from libsql/Turso to Neon Postgres with PostGIS.
-**Why:** location features are core (project pins, GPS field reports, ward polygons,
-proximity "reports near this project"); PostGIS is the standard tool; Neon free tier +
-branching fits; better-auth + drizzle pg are first-class; we're deploying for real.
-**Context note:** an earlier draft leaned Turso (scaffold default) — that was before
-geospatial and real deployment became requirements. The offline problem was never a DB
-problem (see ADR-005), so this switch costs the offline story nothing.
-**Changes our mind:** Neon free-tier storage/egress surprises; PostGIS extension gated.
+We moved `packages/db` from libsql/Turso to Neon Postgres with PostGIS lined up.
 
-## ADR-002 — Artifacts in R2, excerpts in Postgres
+Why: location is core to the product (project pins, GPS reports, ward outlines, reports near a project). PostGIS is the standard tool for that. Neon's free tier and branching fit. Auth and Drizzle both treat Postgres as first class. And we are deploying for real.
 
-Raw PDFs/photos immutable and content-addressed in R2 (zero egress, free 10 GB); claims
-carry verbatim excerpts in Postgres so evidence rendering never touches object storage.
-**Changes our mind:** R2 presign complexity exceeding a day.
+Note: an early draft used Turso because the scaffold defaulted to it. That was before location and real deployment became requirements. Offline was never a database problem (see ADR-005), so this switch cost the offline story nothing.
 
-## ADR-003 — LLM extraction with a human publish gate; no LLM verdicts
+Changes our mind: surprise storage or egress bills on the free tier, or the PostGIS extension being gated.
 
-AI proposes typed claims with spans; deterministic rules reconcile; humans approve. Verdicts
-are never model output. **Changes our mind:** never for v1 — this *is* the product thesis.
+## ADR-002, Raw files in R2, quotes in Postgres
 
-## ADR-004 — OCDS-aligned vocabulary, FtM-inspired graph
+Raw PDFs and photos sit in R2, immutable and addressed by hash (no egress fees, 10 GB free). Claims carry their exact quotes in Postgres, so rendering evidence never touches object storage.
 
-Stage enums from OCDS; immutable documents ~ OCDS releases; verdict snapshots ~ records;
-parties/links graph inspired by FollowTheMoney/Aleph. No full standard export in v1.
+Changes our mind: if signed URL plumbing takes more than a day.
 
-## ADR-005 — Offline = client outbox, not database replication
+## ADR-003, The model extracts, a person publishes, no model verdicts
 
-Field reports queue in IndexedDB with idempotency keys; sync via one mutation; Background
-Sync where available, honest fallback elsewhere. No CRDTs — reports are append-only.
-**Changes our mind:** a future requirement to *edit* shared data offline (none today).
+The model proposes typed claims with quotes. Plain rules reconcile. People approve. Verdicts are never model output.
 
-## ADR-006 — Anonymous-by-default reporting (better-auth anonymous plugin)
+Changes our mind: never for v1. This is the product thesis.
 
-No PII from reporters; corroboration via pseudonymous sessions; EXIF stripped client-side.
-Kenya DPA 2019 compliance is a design consequence, not a policy page.
+## ADR-004, Words borrowed from open contracting, graph borrowed from FollowTheMoney
 
-## ADR-007 — Hono API on a long-lived host (Railway/Fly), web on Cloudflare Pages
+Stage names come from the Open Contracting Data Standard. Immutable documents play the role of releases, verdict snapshots the role of records. The parties and links graph takes cues from FollowTheMoney and Aleph. No full standard export in v1.
 
-PDF/Gemini workloads exceed comfortable Workers budgets today; Hono stays Workers-compatible
-(Neon serverless driver + R2 bindings) so edge migration later is incremental.
-**Changes our mind:** ops burden > Workers porting cost.
+## ADR-005, Offline means an outbox on the phone, not database sync
 
-## ADR-008 — Parties stay as named in the record
+Reports wait in IndexedDB under idempotency keys and submit through one call. Background Sync where the browser has it, honest fallback everywhere else. No conflict resolution machinery, because reports are only ever appended.
 
-If the OAG doesn't name a contractor, we don't. Labels like "Contractor A (unnamed in OAG
-report)". Defamation-safe, and *more* credible: we show the record, not our conclusions.
+Changes our mind: a future need to edit shared data offline. Nothing today needs that.
 
-## ADR-009 — CARTO Dark now; Kenya PMTiles-on-R2 as the scale path
+## ADR-006, Anonymous reporting (Better Auth anonymous sessions)
 
-The current demo uses CARTO Dark raster tiles through MapLibre because the public style is
-keyless, visually suited to the case-file HUD, and quick to ship. Attribution remains visible
-for OSM and CARTO. This is an online demo dependency, not an offline guarantee: the case file
-must remain usable as a list when tiles fail. The scale path is a Kenya-only PMTiles extract on
-R2, which reduces third-party dependency and supports regional caching.
+Reporters give no personal details. Repeat reporters are recognized by session, not by identity. Location data is stripped on the phone. Kenya's Data Protection Act holds because of the construction, not because of a policy page.
 
-**Changes our mind:** CARTO availability/terms become unsuitable for the demo, attribution
-cannot be maintained, or the R2-hosted PMTiles path is not operationally simpler.
+## ADR-007, Hono API on a long lived host, web on Cloudflare Pages
 
-## ADR-010 — Subagents abandoned for research (2026-09-21)
+PDF reading and model calls need more CPU and wall time than Workers comfortably allow today. Hono stays Workers compatible (Neon serverless driver plus R2 bindings), so moving to the edge later is a small step.
 
-Spawned research agents had no network path (connection refused). Research was done direct.
-Not a product decision — recorded so we don't burn time retrying that lane today.
+Changes our mind: if running the server costs more effort than porting to Workers.
 
-## ADR-011 — Assertions are canonical; narratives are derived — 2026-09-21
+## ADR-008, Parties appear as the record names them
 
-The product's durable object is a provenance-bearing assertion about an entity, not a document summary. Documents, web pages, photos, videos, and field reports are containers for evidence. Extractors stage typed candidates with exact source spans; deterministic reconciliation compares approved claims; the public narrative is rendered last and returns its basis claim IDs.
+If the Auditor-General does not name a contractor, neither do we. Labels read like "Contractor A (unnamed in OAG report)". This is safer legally, and more believable: we show the record, not our conclusions.
 
-This keeps claimed, observed, and supported states distinct, makes disagreement inspectable, and prevents an LLM from silently becoming the source of truth. **Changes our mind:** a future domain where claims cannot be independently cited, reviewed, or updated over time.
+## ADR-009, CARTO Dark now, Kenya map extract on R2 later
 
-## ADR-012 — Use maintained integrations for auth, model extraction, and object storage — 2026-09-21
+The demo uses CARTO Dark raster tiles through MapLibre because the style is public and keyless, suits the case file look, and ships fast. OpenStreetMap and CARTO stay credited. This is an online demo dependency, not an offline promise: the case file must read fine as a list when tiles fail. The scale plan is a Kenya-only extract on R2, which cuts the third party dependency and allows regional caching.
 
-Better Auth owns sessions, anonymous reporting, reviewer roles, and magic links. The AI SDK/provider integration owns structured extraction and validation. Cloudflare R2 is accessed through the AWS S3-compatible SDK and presigned URLs. TanStack/IndexedDB and Workbox provide the PWA outbox and service-worker behavior. We do not replace these with custom authentication, storage signing, model protocols, or offline synchronization layers.
+Changes our mind: CARTO terms or availability turn unsuitable, credit cannot be kept, or the R2 hosted extract proves simpler to run.
 
-**Changes our mind:** a platform constraint that a maintained integration cannot support the required provenance, security, or offline semantics.
+## ADR-010, Research agents dropped for direct research, 2026-09-21
 
-## ADR-013 — Varlock owns environment loading and validation — 2026-09-21
+Spawned research agents had no network path (connection refused). Research was done directly instead. Not a product decision. Written down so nobody burns time retrying that today.
 
-Each runnable app owns a `.env.schema`; Bun's automatic dotenv loading is disabled with
-`env = false`, and Varlock loads/validates the environment before the app starts. This avoids
-silently mixing `.env`, `.env.local`, and environment-specific values across workspace packages.
-Run validation from the owning app directory with `bun x varlock load --show-all`.
+## ADR-011, Claims are the product, stories are rendered, 2026-09-21
 
-The Windows `UV_HANDLE_CLOSING` assertion can occur during Varlock/Bun shutdown and is a
-runtime/libuv issue, not a useful validation diagnosis. The validation output immediately above
-it remains authoritative. **Changes our mind:** a deployment platform that supplies a stronger,
-centrally managed secret/config contract without losing schema validation.
+What lasts is a claim about a thing, with its source attached. Documents, pages, photos, videos, and field reports are containers. Extractors stage typed candidates with exact quotes. Reconciliation compares approved claims. The public story renders last and lists the claim IDs behind it.
 
-## Open questions (not yet decisions)
+That keeps claimed, observed, and supported as three different states, keeps disagreement visible, and stops the model from quietly becoming the source of truth.
 
-1. Swahili translation depth: UI strings only, or claim summaries too (Gemini-assisted,
-   always linked to the English/original span)?
-2. Reviewer identity for the demo: single seeded reviewer account vs magic-link setup live?
-3. Do we show the unnamed-contractor *pattern* across projects in the UI (graph view) or
-   keep it as a narrative contradiction card? (Leaning: card. Graph is v2.)
+Changes our mind: a future area where claims cannot be quoted, reviewed, or updated over time.
+
+## ADR-012, Use kept libraries for auth, models, and storage, 2026-09-21
+
+Better Auth owns sessions, anonymous reporting, reviewer roles, and magic links. The AI SDK owns structured extraction and validation. R2 is reached through the S3 style SDK and signed URLs. TanStack plus IndexedDB plus Workbox provide the outbox and service worker. We do not hand roll auth, signing, model protocols, or sync.
+
+Changes our mind: a platform limit that a kept library cannot meet for evidence, security, or offline needs.
+
+## ADR-013, Varlock owns environment loading, 2026-09-21
+
+Each runnable app owns an `.env.schema`. Bun's auto dotenv is off (`env = false`), and Varlock loads and checks the environment before the app starts. That stops `.env` and `.env.local` values from mixing silently across packages. Check from the app folder with `bun x varlock load --show-all`.
+
+The Windows `UV_HANDLE_CLOSING` message during Varlock or Bun shutdown is a runtime issue, not a diagnosis. The validation output above it is what counts.
+
+Changes our mind: a host that provides a stronger secrets contract without losing schema checks.
+
+## Open questions (not decisions yet)
+
+1. How deep does Swahili go: interface strings only, or claim summaries too (model helped, always linked to the original quote)?
+2. Reviewer login for the demo: one seeded reviewer account, or magic link setup live?
+3. Do we show the unnamed contractor pattern across projects as a graph, or keep it as a contradiction card? Leaning card. Graph is v2.

@@ -1,88 +1,69 @@
-# 01 — Vision & case
+# 01, Vision and case
 
 ## One sentence
 
-**collective** turns a community's scattered public record — audits, budgets, tenders, press
-claims, and what residents can see with their own eyes — into an **inspectable evidence chain**
-that anyone can verify and act on.
+collective takes a community's scattered public record, audits, budgets, tenders, press claims, and what residents see themselves, and turns it into an evidence chain anyone can check.
 
-Not a chatbot. Not a dashboard. An engine that answers one question honestly:
+Not a chatbot. Not a dashboard. It answers one question honestly:
 
-> "The county said it was built. What can the public record actually *establish*?"
+> "The county said it was built. What does the public record actually show?"
 
 ## The problem
 
-Citizen audits already exist and already work — OSF has funded them in Kenya and South Africa
-for years; the National Taxpayers Association runs ward committees that do this with paper,
-site visits, and meetings. What does not exist is the **machinery**:
+Citizen audits already exist and they work. OSF has funded them in Kenya and South Africa for years. The National Taxpayers Association runs ward committees that do this with paper, site visits, and meetings. What is missing is the machinery around them:
 
-1. The record is fragmented across audit PDFs, budget books, tender portals, press releases,
-   and news investigations — each in a different silo, format, and vocabulary.
-2. Reading it requires institutional knowledge (what is a Green Book? who audits counties?
-   what does "stalled" mean contractually?).
-3. The community's own observations — "that clinic has been fenced off for two years" — have
-   no structured place to live alongside the official record.
-4. Even when a contradiction is found, nobody knows *what to do next*: which institution,
-   which document to demand, which law entitles you to it.
+1. The record is split across audit PDFs, budget books, tender portals, press releases, and news stories. Each one has its own format and its own words for the same thing.
+2. Reading it takes inside knowledge. What is a Green Book? Who audits counties? What does "stalled" mean in a contract?
+3. What residents see, "that clinic has been fenced off for two years", has nowhere structured to sit next to the official record.
+4. Even when someone finds a contradiction, nobody knows what to do next. Which office, which document to ask for, which law gives you the right to ask.
 
-## The case we build against (locked)
+## The case we build against
 
-**Nairobi County health facilities cluster**, from the Auditor-General's FY2022/23 county
-reports (public) and subsequent public record:
+This case is fixed. We are not swapping it out.
 
-- One contractor was engaged to build **three Pumwani health facilities** (Lucky Summer
-  Dispensary, Pumwani Majengo Health Centre, Gumba/Mabatini Dispensary) for a combined
-  **KSh 869M**. OAG physical inspection (28–29 Sept 2023): incomplete; Lucky Summer "barely
-  started... dilapidated"; Majengo missing its perimeter wall.
-- The **same contractor** was then awarded **Mama Lucy Kibaki Hospital Phase II** for
-  **KSh 344,100,000**. It stalled after **KSh 165,099,105** was paid.
-- In **2025 the county re-tendered "construction and completion works"** for Mama Lucy
-  Phase II — an official document implicitly conceding non-delivery.
-- Media ground truth exists (Willow Health Media's clinic investigation, Eastleigh Voice,
-  The Star, NTV). Three fiscal years of OAG reports give us **the same projects observed at
-  three points in time** — freshness and versioned claims demonstrated on real documents.
+Nairobi County health facilities, from the Auditor-General's county reports for FY2022/23 (public) and what came after:
 
-Four projects, one case file, one unnamed-contractor thread the reconciliation engine surfaces.
+- One contractor was hired to build three Pumwani health facilities (Lucky Summer Dispensary, Pumwani Majengo Health Centre, Gumba/Mabatini Dispensary) for KSh 869M combined. The Auditor-General inspected on 28 and 29 Sept 2023 and found them incomplete. Lucky Summer had barely started and looked run down. Majengo was missing its perimeter wall.
+- The same contractor then won Mama Lucy Kibaki Hospital Phase II for KSh 344,100,000. Work stalled after KSh 165,099,105 had been paid.
+- In 2025 the county re-tendered "construction and completion works" for Mama Lucy Phase II. That document admits, without saying it, that the work was never delivered.
+- Journalists have been on the ground (Willow Health Media, Eastleigh Voice, The Star, NTV). Three years of audit reports cover the same projects at three points in time, which is exactly what you need to show how claims change.
 
-## Design principles
+Four projects, one case file, one unnamed contractor running through all of them.
 
-1. **Evidence before inference.** The system assembles, cross-references, and flags. It never
-   turns an inference into a source fact. Verdicts are explicit — `corroborated /
-   partially_corroborated / contradicted / unverifiable` — and every one is traceable to
-   approved claims and verbatim evidence.
-2. **Provenance or it didn't happen.** Every claim carries a provenance lane: document +
-   span, media artifact, or structured field report. Documents and media are retained and
-   content-addressed where available; derived interpretations never replace them.
-3. **"Unverifiable" is an answer.** Absence of evidence is a first-class, actionable output —
-   it generates the exact next step (which document to demand, from whom, under which law).
-4. **Action is the output.** A case file ends in next steps: the institution, the pre-filled
-   Access to Information Act (2016) request, the oversight referral. Not a red chart.
-5. **Built for the matatu, not the boardroom.** PWA-first, offline-capable field reporting,
-   low-bandwidth reads, low-end Android as the reference device.
-6. **Anonymous by default.** Field reporters never provide PII (Kenya Data Protection Act
-   2019 by design, not by policy page). Pseudonymous corroboration without identity.
-7. **Language discipline.** We say "the record shows", "the sources disagree", "this cannot be
-   established". Never "corrupt", never "stolen". The system is an evidence interface, not an
-   accusation machine.
+## How we think
 
-## Track alignment (brief → design)
+1. Evidence before guessing. The system collects, compares, and flags. It never turns a guess into a fact. Every verdict is one of four words, corroborated, partially corroborated, contradicted, or unverifiable, and each one traces back to approved claims and exact quotes.
+2. No source, no claim. Every claim points to one of three things: a document plus the exact passage, a photo or recording, or a field report someone filed. We keep the originals. A summary never replaces them.
+3. "Unverifiable" counts as an answer. When the evidence is missing, the system says so, and tells you the exact next step: which document to ask for, from whom, under which law.
+4. A case file should end in action. The output is the office to contact, a pre-filled request under the Access to Information Act (2016), a referral to an oversight body. Not a red chart.
+5. Built for the matatu, not the boardroom. The app works on cheap Android phones, on slow networks, and offline where it matters.
+6. Anonymous by default. Reporters give no personal details. Kenya's Data Protection Act (2019) holds because of how the system is built, not because a policy page says so.
+7. Careful with words. We say "the record shows", "the sources disagree", "this cannot be established". We never say "corrupt" or "stolen". This is an evidence tool, not an accusation tool.
 
-| Brief requirement | Our answer |
-| --- | --- |
-| Transparency & Accountability track | Real-time scrutiny of public projects, not after-the-fact |
-| "More than present information… engage with government" | Next-step engine: ATI requests, oversight referrals, institution routing |
-| Trust & verification | Content-addressed documents, span-grounded claims, verdict snapshots |
-| Low bandwidth | PWA + edge-cached API + small payloads + optional map |
-| Privacy & security | Anonymous reporting, EXIF-stripped photos, no PII |
-| Multilingual | EN/SW interface shell; claim summaries translatable (Gemini) |
-| Local relevance / adaptable | Kenya institutions directory; OCDS-aligned schema swaps countries |
-| Clear next steps | The entire stage ⑤ of the pipeline |
-| "Not an information website" | The unit of the product is the *case file with actions*, not articles |
+## How this fits the brief
 
-## Non-goals (v1)
+The hackathon asks for work under Transparency and Accountability, and that is where we sit: scrutiny of public projects while they happen, not years later.
 
-- Nationwide coverage — one county, one case, done deeply.
-- Naming or accusing parties the record itself leaves unnamed.
-- Automated corruption detection, scoring, or rankings of officials.
-- A general-purpose civic chatbot.
-- Production-scale ingestion of every Kenyan source (pipeline is real; corpus is curated).
+"More than present information" is answered by the next-step engine. Every gap turns into a request or a referral with the right office named.
+
+Trust and verification come from keeping the original documents, quoting exact passages, and snapshotting verdicts so you can see what changed.
+
+Low bandwidth is answered by the PWA, small API responses, cached pages, and a map you can switch off.
+
+Privacy is answered by anonymous reporting and photos stripped of location data before they leave the phone.
+
+Multilingual means the interface shell runs in English and Swahili, and claim summaries can be translated with the original always one tap away.
+
+Local relevance means a real directory of Kenyan offices, real wards, and a schema borrowed from open contracting standards so another country can reuse it.
+
+Clear next steps are simply what the last pipeline stage does.
+
+And it is not an information website. The unit of this product is the case file with actions attached, not articles.
+
+## What we are not doing (v1)
+
+- Covering the whole country. One county, one case, done properly.
+- Naming people the record itself does not name.
+- Scoring officials or detecting corruption automatically.
+- Building a general civic chatbot.
+- Ingesting every Kenyan source. The pipeline is real but the starting set of documents is picked by hand.

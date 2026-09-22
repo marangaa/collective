@@ -1,58 +1,55 @@
 # collective
 
-**collective** turns a community's scattered public record—audits, budgets, tenders, press claims, and field observations—into an inspectable evidence chain that people can verify and act on.
+Public records about government projects are scattered. Audit reports live in PDFs, budgets in spreadsheets, tenders on portals, and what residents see with their own eyes lives nowhere at all. collective pulls all of that into one case file that anyone can check.
 
-The first case is the Nairobi County health facilities cluster. The product is a case-file PWA, not a chatbot or a generic dashboard: every public assertion should lead back to its source, and every uncertainty should produce a useful next step.
+The first case is health facilities in Nairobi County. The product is a case-file app, not a chatbot or a dashboard. Every claim links back to its source. Every gap points to a next step.
 
-## What is implemented
+## What you can do with it
 
-- **Case file** at `/case/nairobi-health-facilities`: map, project switcher, evidence timeline, verdicts, contradictions, evidence requests, next steps, and community reports.
-- **Offline reporting** at `/report/:projectId`: anonymous field observations are compressed, stored in an IndexedDB outbox, and retried when connectivity returns.
-- **Review surface** at `/review`: reviewer workflows for staged claims.
-- **Typed API**: Hono and tRPC, backed by the shared API package.
-- **Evidence model**: approved claims, provenance spans, deterministic reconciliation, verdict snapshots, and action items.
-- **PWA shell**: Vite PWA with a custom Workbox service worker. Document navigations are routed to the client app shell; API requests remain network-only.
+- Open the case file at `/case/nairobi-health-facilities`: a map, the four projects, an evidence timeline, verdicts per project, contradictions between sources, open evidence requests, next steps, and community reports.
+- File a report at `/report/:projectId`: say what you saw at a facility. It works offline. The report is stored on your phone and sent when you are back online. No account, no name.
+- Review staged claims at `/review`: for reviewers only. Approve or reject what the extraction pipeline pulled out of documents.
+
+Under the hood there is a typed API (Hono and tRPC), an evidence model (approved claims, source excerpts, verdict snapshots, action items), and a PWA shell that works offline for reading and reporting.
 
 ## Technology
 
-- TypeScript
-- React 19
+Plain list, no surprises:
+
+- TypeScript and React 19
 - TanStack Router and TanStack Query
-- Tailwind CSS 4 and shared shadcn/ui primitives
+- Tailwind CSS 4 with shared UI primitives
 - Hono and tRPC
 - Bun and Turborepo
 - Drizzle ORM with Neon PostgreSQL
-- Better Auth with anonymous sessions, reviewer roles, magic links, and database-backed rate limiting
-- MapLibre GL with CARTO Dark raster tiles for the current map view (PMTiles/R2 is the planned offline path)
-- Cloudflare R2 interfaces for documents, photos, and future presigned uploads
-- Gemini/AI SDK pipeline code for structured extraction and evidence-span validation
+- Better Auth (anonymous sessions, reviewer roles, magic links, database rate limiting)
+- MapLibre GL with CARTO Dark tiles for the map
+- Cloudflare R2 for documents and photos
+- Gemini through the AI SDK for reading documents into structured claims
 
 ## Repository structure
 
 ```text
 collective/
 ├── apps/
-│   ├── web/                 # React PWA and TanStack Router routes
-│   └── server/              # Bun/Hono API and Better Auth handler
+│   ├── web/                 # The PWA and its routes
+│   └── server/              # The API (Bun/Hono) and auth
 ├── packages/
 │   ├── api/                 # tRPC routers, reconciliation, seed data
-│   ├── db/                  # PostgreSQL schema and Drizzle migrations
-│   ├── pipeline/            # ingestion, extraction, resolution, and jobs
-│   ├── ui/                  # shared UI primitives and design tokens
-│   └── config/              # shared TypeScript configuration
-├── corpus/                  # local, gitignored source-artifact vault
-├── docs/                    # product and architecture design authority
-└── package.json             # workspace scripts
+│   ├── db/                  # Database schema and migrations
+│   ├── pipeline/            # Reading documents, extracting claims
+│   ├── ui/                  # Shared UI pieces
+│   └── config/              # Shared TypeScript config
+├── corpus/                  # Local source files (gitignored, stays on your machine)
+├── docs/                    # Design docs, the source of truth
+└── package.json             # Workspace scripts
 ```
 
 ## Prerequisites
 
 - Bun 1.4 or newer
-- A Neon PostgreSQL database
-- Node-compatible tooling for the Bun/Vite ecosystem
-- Environment values required by the web and server schemas
-
-There is no local SQLite, PGlite, or file-backed database fallback. Development and production use PostgreSQL/Neon.
+- A Neon PostgreSQL database (there is no local file database option, dev and prod both use Postgres)
+- Node-compatible tooling for the Bun/Vite setup
 
 ## Install and configure
 
@@ -60,12 +57,19 @@ There is no local SQLite, PGlite, or file-backed database fallback. Development 
 bun install
 ```
 
-Each app owns its Varlock schema:
+Each app has its own environment schema:
 
-- `apps/server/.env.schema` for the API, database, auth, storage, and server integrations
-- `apps/web/.env.schema` for browser-safe values such as `VITE_SERVER_URL`
+- `apps/server/.env.schema` for the API, database, auth, and storage
+- `apps/web/.env.schema` for browser-safe values like `VITE_SERVER_URL`
 
-Create ignored environment files beside the relevant schema, then validate them from the owning app directory:
+There are example files to copy from:
+
+```bash
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+```
+
+Then fill in your values and check them from each app directory:
 
 ```bash
 cd apps/server
@@ -77,25 +81,27 @@ bun x varlock load --show-all
 bun run env:generate
 ```
 
-Do not put Neon credentials or Better Auth secrets in the web app. Only variables explicitly intended for the browser should use the `VITE_` prefix.
+The only values you must set to get running are `DATABASE_URL` (your Neon connection string) and `CORS_ORIGIN` (where the web app runs, usually `http://localhost:3001`). Everything else can wait. `GEMINI_API_KEY` is only needed if you want to run document extraction. The `R2_*` values are only needed for real photo uploads; without them, reports still work, they just submit without photos. `REVIEWER_EMAIL` is needed if you want to sign in at `/review`.
+
+Keep Neon secrets and auth secrets on the server. Only variables meant for the browser start with `VITE_`.
 
 ## Database setup
 
-`DATABASE_URL` must be a Neon/PostgreSQL connection string. Neon provides pooled and direct connection strings:
+`DATABASE_URL` must be a Neon/PostgreSQL connection string. Neon gives you two kinds:
 
-- Use the pooled URL for the long-lived API process when appropriate.
-- Use the direct/unpooled URL for schema migrations when Neon provides both.
+- The pooled URL is for the API process.
+- The direct URL is for running migrations.
 
-Apply checked-in migrations from the database package:
+Run the checked-in migrations from the database package:
 
 ```bash
 cd packages/db
 bun run db:migrate
 ```
 
-The Better Auth tables, including `rate_limit`, are part of the Drizzle schema and migrations. Do not rename a migration directory after it has been applied to Neon; Drizzle uses the migration tag to track execution history.
+The auth tables, including `rate_limit`, are part of the schema. One rule: never rename a migration folder after it has run against Neon. Drizzle tracks which migrations ran by folder name.
 
-Seed the Nairobi case only when you intentionally want to replace the configured database's case data:
+To load the Nairobi case data (this replaces the case data in that database, so only do it on purpose):
 
 ```bash
 cd apps/server
@@ -104,34 +110,40 @@ bun run seed
 
 ## Run the project
 
-From the repository root:
+From the repo root:
 
 ```bash
 bun run dev
 ```
 
-This starts:
+That starts the web app at `http://localhost:3001` and the API at `http://localhost:3000`.
 
-- Web: `http://localhost:3001`
-- API: `http://localhost:3000`
-
-Run one app independently when debugging:
+To run one side on its own:
 
 ```bash
 bun run dev:web
 bun run dev:server
 ```
 
-The service worker is disabled in Vite development to avoid stale navigation interception. Production builds use the custom Workbox service worker.
+The service worker is off in development so it cannot serve you stale pages. Production builds use it.
 
-## Validation and builds
+## A quick tour (three minutes)
+
+1. Open `http://localhost:3001`. You land on the Nairobi health case.
+2. Pick a project on the map (try Mama Lucy Phase II). The dots above it show the verdict for budget, award, payments, delivery, and current state.
+3. Scroll the timeline and open any card. Each one shows the exact excerpt, the document, and the page it came from.
+4. Open the contradictions section. This is where sources disagree.
+5. Hit Report and file an observation. Turn off your network first if you want to see the offline queue work.
+6. Open `/review` after setting `REVIEWER_EMAIL` and signing in through the magic link. Approve a candidate and watch the verdicts update.
+
+## Checks and builds
 
 ```bash
 bun run check-types
 bun run build
 ```
 
-The web package also exposes:
+The web package has two extra commands:
 
 ```bash
 cd apps/web
@@ -139,11 +151,11 @@ bun run generate-pwa-assets
 bun run serve
 ```
 
-If an old service worker is already installed in the browser, unregister it once in DevTools → Application → Service Workers and reload after changing PWA configuration.
+If your browser already installed an old service worker, remove it once under DevTools, Application, Service Workers, then reload.
 
-## Environment troubleshooting on Windows
+## Environment trouble on Windows
 
-If Varlock reports `env config validation failed`, the message above the native assertion is the important part. Run the validator directly from the app that owns the schema:
+If Varlock says `env config validation failed`, look at the line above the error. That line names the bad variable. Run the check directly from the app that owns it:
 
 ```bash
 cd apps/server
@@ -153,17 +165,17 @@ cd ../web
 bun x varlock load --show-all
 ```
 
-The following native error is a known Windows/Bun/libuv shutdown race that can appear while Varlock exits:
+You may also see this native error on Windows while Varlock exits:
 
 ```text
-Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\\win\\async.c, line 94
+Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 94
 ```
 
-It does not identify the invalid environment variable. Fix the validation item printed by `varlock load`; if the assertion still occurs after validation succeeds, update Bun and Varlock, or run the command through a current Node.js environment as a diagnostic comparison. Keep `env = false` in the repository and app `bunfig.toml` files so Bun does not load `.env` files before Varlock.
+That is a known Bun/Windows shutdown race. It does not tell you which variable is wrong. Fix whatever `varlock load` flagged. If validation passes and the message still shows up, update Bun and Varlock, or run the same command under Node to compare. The `bunfig.toml` files keep `env = false` so Bun does not load `.env` files ahead of Varlock.
 
-## Design authority
+## Design docs
 
-The documents in `docs/` define the product and its trust model. Start with:
+The files in `docs/` say what this project is and why it works the way it does. Read them first:
 
 1. [`docs/01-vision.md`](docs/01-vision.md)
 2. [`docs/02-architecture.md`](docs/02-architecture.md)
@@ -173,4 +185,4 @@ The documents in `docs/` define the product and its trust model. Start with:
 6. [`docs/06-infrastructure.md`](docs/06-infrastructure.md)
 7. [`docs/07-decisions.md`](docs/07-decisions.md)
 
-The product rule is simple: **evidence before inference, provenance before confidence, and action after uncertainty.**
+The short version: evidence before guessing, sources before confidence, and every dead end should still tell you what to do next.

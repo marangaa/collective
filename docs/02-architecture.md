@@ -1,92 +1,76 @@
-# 02 — System architecture
+# 02, System architecture
 
 ## The five stages
 
-```
-① SOURCES             ② EXTRACTION            ③ RECONCILIATION       ④ GROUND TRUTH          ⑤ ACTION
-source registry  →    text/PDF → claims  →    claim graph →          community reports  →    gaps → institutions
-fetch → sha256 →      with verbatim spans     verdicts + gaps,       (anonymous, offline     → ATI requests
-vault (R2,            (LLM + rules,           append-only            queue, photo → R2)     → case export
-immutable)            human review gate)      snapshots)             → corroboration
+```text
+SOURCES            EXTRACTION           RECONCILIATION      GROUND TRUTH         ACTION
+source registry    text and PDF         claim graph         community reports    gaps go to
+goes to            becomes claims       becomes verdicts    (anonymous,          offices
+vault (R2,         with exact           and open            offline queue,       as ATI
+stored for good)   quotes (model        questions,          photo goes          requests
+                   plus rules,          kept as             straight to         and case
+                   checked by           snapshots)          storage) goes       exports
+                   a person)                               to corroboration
 ```
 
-Each stage exists to protect one property: **inspectability**. A user can start at any
-verdict and walk backwards to the raw byte-identical document it came from.
+Each stage protects one thing: you can always work backwards. Start at any verdict and follow it back to the exact document it came from, byte for byte.
 
-## Module map (this monorepo)
+## What lives where
 
-```
+```text
 collective/
 ├── apps/
-│   ├── web/          # PWA (React 19, TanStack Router, Tailwind 4, vite-plugin-pwa)
-│   └── server/       # Hono API host: tRPC, better-auth, R2 presigning (Bun)
+│   ├── web/          # The PWA (React 19, TanStack Router, Tailwind 4, vite-plugin-pwa)
+│   └── server/       # The API host: tRPC, auth, photo upload signing (Bun)
 ├── packages/
-│   ├── db/           # Drizzle schema + client (Postgres / Neon, PostGIS)
-│   ├── api/          # tRPC routers + reconciliation engine + next-step generator
-│   ├── pipeline/     # ingestion & extraction (fetch, hash, vault, Gemini extractors,
-│   │                 # span validation, review-queue writers) — runs as scripts/jobs
-│   ├── ui/           # shared shadcn primitives
-│   └── config/       # shared tsconfig
-├── corpus/           # local source-artifact vault for pipeline development (gitignored artifacts)
-└── docs/             # this design set
+│   ├── db/           # Database schema and client (Postgres on Neon, PostGIS later)
+│   ├── api/          # tRPC routes, the reconciliation engine, the next-step generator
+│   ├── pipeline/     # Reading documents (fetch, hash, store, extract with Gemini,
+│   │                 # check quotes, queue for review). Runs as scripts and jobs.
+│   ├── ui/           # Shared interface pieces
+│   └── config/       # Shared TypeScript config
+├── corpus/           # Local copies of source files for pipeline work (gitignored)
+└── docs/             # These design docs
 ```
 
-`packages/pipeline` is a job-oriented workspace package. It reads and writes through storage and
-provider interfaces, while the API and database packages remain responsible for serving and
-persisting the public case file. Better Auth is wired manually in `apps/server` because it is an
-application boundary, not a shared data-layer concern.
+The pipeline package only reads and writes through storage and provider interfaces. The API and database packages serve and store the public case file. Auth is wired by hand in `apps/server` because login is an app concern, not a data layer concern.
 
-## Data flow narratives
+## How data moves
 
-**Ingestion run (per source document):**
-`fetch → sha256 → vault raw bytes (R2 or the gitignored corpus during pipeline development) → Gemini document understanding (chunked,
-page-anchored) → claim candidates with spans → programmatic span validation (excerpt must
-fuzzy-match source text at stated page) → review queue (status pending) → human approve →
-claims published → reconciliation re-run → verdict snapshot appended.`
+Reading a new document:
 
-**Field report (offline path):**
-`PWA form → anonymous session (better-auth anonymous) → photo compressed + EXIF-stripped
-client-side → outbox row in IndexedDB (client_uuid) → sync when online (Background Sync API
-where available; else online-event/app-open/manual retry) → presigned PUT direct to R2 →
-tRPC mutation (idempotent on client_uuid) → corroboration state recomputed.`
+Fetch the file, hash it, store the raw bytes (R2, or the local corpus folder while developing). Gemini reads it in page chunks. The model returns claim candidates with exact quotes. Code checks each quote against the stated page, the page has to exist and the text has to match. What passes goes into a review queue. A person approves it. Approved claims get published. Reconciliation runs again and a new verdict snapshot is stored.
 
-**Reconciliation:**
-pure functions in `packages/api/lib/reconcile/` over claims + links + field reports for one
-project/aspect → verdict + gaps + basis claim IDs → appended to `verdicts` with an
-`inputs_hash`. Never updates in place. A verdict flipping between audits is a *feature* we
-display ("what changed").
+Filing a report offline:
 
-## Deployment topology (target)
+The form creates an anonymous session, shrinks the photo and strips its location data on the phone, then saves the report in an IndexedDB outbox with a client ID. When the phone is back online (Background Sync where the browser has it, otherwise the online event, app open, or a manual retry button), the photo uploads straight to storage through a signed URL and the report submits through one tRPC call. The client ID makes retries safe. Then corroboration is recalculated.
 
-```
-                 ┌───────────────┐
- Browser (PWA) ─►│ Cloudflare     │  static web, edge-cached (Nairobi/Mombasa PoPs)
-                 │ Pages          │
-                 └──────┬────────┘
-                        │ tRPC over HTTPS (batched, small payloads)
-                 ┌──────▼────────┐         ┌──────────────────┐
-                 │ Hono API       │────────►│ Neon Postgres     │  eu-central, pooled,
-                 │ (Bun, Railway/ │  pg     │ + PostGIS         │  0.5 GB free tier fits:
-                 │  Fly long-lived)│         └──────────────────┘  blobs live in R2
-                 └──────┬────────┘
-                        │ presign / vault
-                 ┌──────▼────────┐         ┌──────────────────┐
-                 │ Cloudflare R2  │◄────────│ pipeline jobs     │  cron (Railway cron or
-                 │ raw docs, text,│  S3 API │ (packages/pipeline)│  GH Actions) — fetch +
-                 │ photos, tiles  │         └──────────────────┘  extract, not in API path
-                 └───────────────┘
+Reconciliation:
+
+Plain functions in `packages/api/lib/reconcile/` look at the claims, the links between them, and the field reports for one project and one aspect. Out comes a verdict, the open gaps, and the IDs of the claims behind it. The verdict is appended with a hash of its inputs. Old verdicts stay. When a verdict flips between audits, we show that as "what changed", because that is the point.
+
+## Where it runs
+
+```text
+Phone browser (PWA) talks to Cloudflare Pages, static web app, cached at the edge.
+
+Pages talks to the Hono API (Bun, on Railway or Fly, long lived) over tRPC.
+
+The API talks to Neon Postgres (eu-central, pooled, free tier fits because
+PDFs and photos live in R2, not in the database).
+
+The API signs uploads for Cloudflare R2 (raw docs, text, photos, map tiles).
+
+Pipeline jobs (packages/pipeline) run on a schedule, Railway cron or
+GitHub Actions. They fetch and extract. They are never in the request path.
 ```
 
-**Why a long-lived server and not Cloudflare Workers (today):** PDF extraction + Gemini
-calls exceed Workers' comfortable CPU/wall-clock budget; some PDF tooling assumes Node APIs;
-better-auth is simplest on Node/Bun. Hono stays Workers-compatible so this can move later
-(Neon serverless driver + R2 bindings make that a small step, not a rewrite). See ADR-007.
+Why a long lived server instead of Cloudflare Workers for now: reading PDFs and calling Gemini takes more CPU and wall time than Workers comfortably allow, some PDF tools expect Node APIs, and auth is simplest on Node or Bun. Hono can move to Workers later (Neon serverless driver plus R2 bindings make that a small move). See ADR-007.
 
-## Hard boundaries (modularity contract)
+## Boundaries that matter
 
-- `packages/db` knows PostgreSQL tables and migrations, nothing else.
-- `packages/pipeline` writes claim *candidates*; it cannot publish (only the review gate can).
-- The reconciliation engine is **pure** (no I/O, no LLM calls) — testable, deterministic.
-- LLM access only through `packages/pipeline/extract/*` and `packages/api/lib/ai/*` behind a
-  provider interface (AI SDK). Swap Gemini ↔ anything without touching callers.
-- Storage only through a `StorageDriver` interface (`R2Driver`, `LocalFsDriver`).
+- `packages/db` knows the Postgres tables and migrations. Nothing else.
+- `packages/pipeline` writes claim candidates. It cannot publish. Only the review gate publishes.
+- The reconciliation engine is pure functions. No network, no model calls. Easy to test, same input always gives the same output.
+- The model is only reachable through `packages/pipeline/extract/*` and `packages/api/lib/ai/*`, behind a provider interface. Swapping Gemini for something else touches one place.
+- Storage is only reachable through a `StorageDriver` interface, with an R2 version and a local folder version.

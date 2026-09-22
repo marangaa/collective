@@ -6,7 +6,7 @@ import { logger } from "hono/logger";
 
 import { createContext } from "./context";
 import { auth } from "./auth";
-import { ENV } from "./env.server";
+import { ENV } from "./env";
 
 const app = new Hono();
 

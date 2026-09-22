@@ -1,51 +1,44 @@
-# 03 — Data model: assertions, evidence, and state
+# 03, Data model: claims, evidence, and state
 
-The database models Collective as a provenance-preserving observation system. A document is a container; an assertion is the unit that can be compared, cited, reviewed, and placed on a timeline.
+The database treats collective as a system that keeps evidence, not a pile of documents. A document is a container. A claim is the thing you can compare, quote, review, and put on a timeline.
 
-The current schema is **v3**. It is implemented in `packages/db/src/schema/` and uses Postgres/Drizzle. The schema deliberately keeps official records and community observations in the same evidence graph while retaining their provenance and source lane.
+The schema is at v3. It lives in `packages/db/src/schema/` and runs on Postgres through Drizzle. Official records and community observations sit in the same graph, but each one keeps its own lane so you always know where a claim came from.
 
-## Epistemic rules
+## The rules
 
-- Original documents and media remain authoritative artifacts. Derived text, OCR, descriptions, and narratives are never substitutes for them.
-- Ingestion records provenance only. It does not assign truth.
-- Extractors write to staging (`claim_candidates`); only review publication writes canonical claims.
-- Approved claims are append-only. Conflicts coexist and are represented by `claim_links` and verdict snapshots.
-- `verdicts` are deterministic, explainable summaries over a set of claims. They are not LLM output and do not overwrite claims.
-- A public narrative is a rendering of approved claims and verdicts. It carries the IDs of its basis claims.
-- Field reports are structured observations, not votes or comments. They become claims with `field_report_id` provenance.
-- Trust is multi-dimensional: provenance, specificity, recency, directness, verifiability, independence, corroboration, and consistency are stored/explained separately. There is no canonical single trust score.
+- The original document or photo is always the authority. Extracted text, transcripts, and summaries never replace it.
+- Saving a file records where it came from. It says nothing about whether it is true.
+- The model writes to staging (`claim_candidates`). Only a reviewer publishing writes real claims.
+- Approved claims are never edited or deleted. When claims disagree, the disagreement is stored as links and verdict snapshots.
+- A verdict is a plain, repeatable summary over a set of claims. It is not model output and it never overwrites claims.
+- The public story is rendered from approved claims and verdicts, and it carries the IDs of the claims it used.
+- A field report is an observation with a structure, not a comment or a vote. It becomes a claim like any other, with the report as its source.
+- Trust has eight parts (where it came from, how specific it is, how recent, how direct, how checkable, how independent, how corroborated, how consistent). Each is stored on its own. There is no single trust score.
 
-## Core graph
+## The shape of it
 
 ```text
-source ──< document ──< document_page
-                         │
-                         └──< claim_candidate ──publish──> claim
-                                                        │
-entity <──────────────── subject/object ────────────────┘
-  │                                                     │
-  └── entity_relation                              claim_link
-                                                        │
-                                                  verdict snapshot
+source has many documents, each document has many pages.
+A page holds claim candidates, and publishing turns a candidate into a claim.
+Claims point at entities as their subject or object.
+Entities link to each other, claims link to each other, and claims roll up into verdicts.
 
-field_report ──< media
-      │
-      └── claim (same canonical claim model, field_report provenance)
+A field report holds photos and also becomes a claim, with the report as its source.
 ```
 
 ## Tables
 
-### Sources and normalized artifacts
+Sources and files:
 
 ```text
 sources
   id, name, publisher, type, url, country_code, county,
-  trust_tier(official|independent|community), first_seen_at
+  trust_tier (official, independent, or community), first_seen_at
 
-source.type
-  audit | procurement | budget | press | news | community |
-  official_database | civil_society | citizen_observation |
-  photo | video | social_post
+source types
+  audit, procurement, budget, press, news, community,
+  official_database, civil_society, citizen_observation,
+  photo, video, social_post
 
 documents
   id, source_id, title, doc_type, fiscal_year, url, published_at,
@@ -53,17 +46,17 @@ documents
   vault_state, supersedes_id, extraction_state, notes
 
 document_pages
-  id, document_id, page_number UNIQUE PER DOCUMENT, text,
+  id, document_id, page_number (unique per document), text,
   char_count, metadata, created_at
 ```
 
-The original bytes are stored in object storage when configured (Cloudflare R2 through the S3-compatible API). Postgres stores metadata and normalized page text for citation and extraction. A new version gets a new document row and points to its predecessor through `supersedes_id`.
+The original file sits in object storage when configured (Cloudflare R2 over its S3-style API). Postgres keeps metadata plus the page text used for quotes and extraction. A new version of a document is a new row that points back at the old one through `supersedes_id`.
 
-### Canonical entities
+Entities (the things claims talk about):
 
 ```text
 entities
-  id, type(project|site|organization|institution|contract|person),
+  id, type (project, site, organization, institution, contract, person),
   canonical_name, description, identifiers, country_code, county, created_at
 
 entity_aliases
@@ -72,7 +65,7 @@ entity_aliases
 
 entity_relations
   id, from_entity_id, to_entity_id,
-  relation(site_of|part_of|managed_by|implemented_by|concerns|same_as),
+  relation (site_of, part_of, managed_by, implemented_by, concerns, same_as),
   first_seen, last_seen
 
 project_details
@@ -85,121 +78,121 @@ institution_details
   entity_id, kind, jurisdiction, mandate, contact_channels, ati_eligible
 ```
 
-Names extracted from a source remain in `claim_candidates.subject_name_raw` and `object_name_raw`. The resolver may attach canonical entity IDs, a method, and a score. Unresolved names remain reviewable; they are never silently assigned to an arbitrary project.
+Names as written in a source stay in the candidate's raw name fields. The resolver can attach a canonical entity with a method and a score. Names it cannot place stay visible for review. They are never quietly assigned to some project.
 
-### Canonical assertions and evidence links
+Claims and the links between them:
 
 ```text
 claims
   id, subject_entity_id, predicate, object_entity_id,
   value_text, value_numeric, value_unit, value_date, value_status, value_pct,
   assertion, stage, span,
-  document_id NULL, media_id NULL, field_report_id NULL,
+  document_id, media_id, field_report_id (exactly one of these is set),
   observed_at, published_at, extracted_at, first_seen, last_seen,
-  extraction_method(llm|rule|manual), confidence, dimensions,
+  extraction_method (llm, rule, or manual), confidence, dimensions,
   review_state, reviewed_by, reviewed_at, review_action, review_note,
   from_candidate_id, created_at
 
-claim.predicate
-  asserted_status | tender_published | contract_awarded_to | contract_value |
-  budget_allocated | payment_made | expected_completion | completion_claimed |
-  progress_reported | inspection_finding | delivery_observed | observed_status |
-  managed_by | implemented_by | located_in | commissioned | demolished | operational
+claim predicates
+  asserted_status, tender_published, contract_awarded_to, contract_value,
+  budget_allocated, payment_made, expected_completion, completion_claimed,
+  progress_reported, inspection_finding, delivery_observed, observed_status,
+  managed_by, implemented_by, located_in, commissioned, demolished, operational
 
-claim.stage
-  planning | tender | award | contract | implementation | completion
+claim stages
+  planning, tender, award, contract, implementation, completion
 
 claim_links
   id, from_claim_id, to_claim_id,
-  relation(supports|contradicts|updates|same_finding),
-  rationale, created_by(engine|human), created_at
+  relation (supports, contradicts, updates, same_finding),
+  rationale, created_by (engine or human), created_at
 ```
 
-Each canonical claim has one provenance lane: a document span, a media artifact, or a field report. `span` contains the location of the evidence, such as `{page, excerpt, start, end}` or media timing/frame metadata. The original artifact is retained separately.
+Each claim has one source lane: a passage in a document, a photo or recording, or a field report. The `span` field says where the evidence sits, for example page plus quote, or time plus frame for media. The original file is kept separately.
 
-### Community observation and media
+Community observations and media:
 
 ```text
 field_reports
-  id, subject_entity_id, user_id NULL, observed_status, answers,
+  id, subject_entity_id, user_id (often empty), observed_status, answers,
   comment, lat, lng, gps_accuracy_m, photo_keys, audio_keys,
-  captured_at, submitted_at, client_uuid UNIQUE,
-  channel(pwa|ussd|whatsapp|voice),
-  corroboration_state(unverified|corroborated|reviewed), is_demo
+  captured_at, submitted_at, client_uuid (unique, makes retries safe),
+  channel (pwa, ussd, whatsapp, voice),
+  corroboration_state (unverified, corroborated, reviewed), is_demo
 
 media
-  id, kind(image|audio|video), title, source_id, vault_key, sha256,
+  id, kind (image, audio, video), title, source_id, vault_key, sha256,
   byte_size, mime, captured_at, lat, lng, exif, derived_text, derived_kind,
   field_report_id, uploaded_by, created_at
 ```
 
-The PWA compresses images and re-encodes them before upload to remove EXIF. Reports enter an IndexedDB outbox with a client UUID, are uploaded through a presigned R2 URL when available, and are submitted idempotently. Background Sync is an enhancement; app-open and online-event retries are the fallback.
+The app shrinks photos and re-saves them before upload, which drops the location data. Reports wait in a phone-side outbox under a client ID, photos upload through a signed URL when storage is set up, and submitting twice with the same client ID creates one report, not two. Background Sync helps where it exists; opening the app or coming back online covers the rest.
 
-### Staged extraction and review
+Staging and review:
 
 ```text
 claim_candidates
-  id, document_id NULL, media_id NULL, field_report_id NULL,
+  id, document_id, media_id, field_report_id (one source),
   subject_name_raw, subject_entity_id, predicate,
   object_name_raw, object_entity_id,
   value fields, assertion, stage, span,
   extractor, model, prompt_version, confidence,
   validation, resolution,
-  status(pending|needs_review|approved|rejected|published),
+  status (pending, needs_review, approved, rejected, published),
   decided_by, decided_at, decision_note, published_claim_id,
-  fingerprint UNIQUE, created_at
+  fingerprint (unique, stops duplicates), created_at
 
 extraction_runs
-  id, document_id NULL, media_id NULL, extractor, model, prompt_version,
+  id, document_id, media_id, extractor, model, prompt_version,
   tokens_in, tokens_out, cost_usd, duration_ms,
-  status(success|failed|partial), created_at
+  status (success, failed, partial), created_at
 ```
 
-The review API is restricted to authenticated reviewer/admin users. Public case queries only expose canonical claims in `review_state = approved`.
+Only signed-in reviewers and admins can use the review API. Public queries only ever see claims with `review_state = approved`.
 
-### Reconciliation, uncertainty, and action
+Verdicts, gaps, and actions:
 
 ```text
 verdicts
   id, subject_entity_id,
-  aspect(budget|award|payments|delivery|current_state),
-  verdict(corroborated|contradicted|unverifiable|partially_corroborated),
-  summary, basis_claim_ids uuid[], gaps jsonb,
+  aspect (budget, award, payments, delivery, current_state),
+  verdict (corroborated, contradicted, unverifiable, partially_corroborated),
+  summary, basis_claim_ids, gaps,
   inputs_hash, computed_at
 
 evidence_requests
   id, subject_entity_id,
-  kind(document|observation|expert|official_confirmation),
+  kind (document, observation, expert, official_confirmation),
   question, rationale, aspect, priority,
-  status(open|fulfilled|dismissed), fulfilled_by_claim_id,
+  status (open, fulfilled, dismissed), fulfilled_by_claim_id,
   generated_by, created_at
 
 action_items
   id, subject_entity_id, institution_entity_id,
-  kind(ati_request|oversight_referral|evidence_needed|field_verification),
-  title, body_template, priority, status(open|done|dismissed),
+  kind (ati_request, oversight_referral, evidence_needed, field_verification),
+  title, body_template, priority, status (open, done, dismissed),
   generated_by, created_at
 ```
 
-A recomputation pass refreshes claim dimensions, creates a new verdict snapshot when the input hash changes, and regenerates open engine evidence requests while preserving fulfilled history. This is the loop from uncertainty to community/institutional action and back to new evidence.
+Each recompute refreshes the claim scores, stores a new verdict when the inputs changed, and rebuilds the open machine-made evidence requests while leaving resolved ones alone. That loop, gap to request to new evidence to new verdict, is how uncertainty turns into action and back into evidence.
 
-### Authentication and auditability
+Login and audit:
 
-Better Auth owns the `user`, `session`, `account`, and `verification` tables through its Drizzle adapter. The configured plugins are anonymous sessions for reporting, admin roles for review, and magic links for reviewer sign-in. `ingest_events` records system, extractor, reviewer, and observer actions.
+Better Auth owns the `user`, `session`, `account`, and `verification` tables through its Drizzle adapter. We use anonymous sessions for reporting, roles for reviewers, and magic links for reviewer sign-in. The `ingest_events` table logs what the system, the extractor, reviewers, and observers did.
 
-## Lifecycle
+## The lifecycle, in order
 
-1. Create the source/document row before parsing; retain the raw artifact even when extraction fails.
-2. Normalize pages/media metadata without changing the original.
-3. Extract typed candidate assertions with exact source spans and raw entity names.
-4. Resolve entities deterministically where possible; stage ambiguous results for review.
-5. Validate spans and structured values; publish only through the reviewer gate.
-6. Recompute dimensions, verdict snapshots, conflicts, and evidence requests.
-7. Render the case file: narrative, official lane, independent lane, community lane, conflicts, supported assessments, timeline, and actions.
-8. Accept structured observations and media; feed them through the same claim/reconciliation loop.
+1. Create the source and document rows first. Keep the raw file even if reading it fails.
+2. Split out pages and media metadata without touching the original.
+3. Pull out typed candidate claims with exact quotes and names as written.
+4. Match names to entities where the match is solid. Leave the rest for a person.
+5. Check quotes and values. Publish only through review.
+6. Recompute scores, verdicts, conflicts, and evidence requests.
+7. Render the case file: the story, the three lanes (official, independent, community), the conflicts, the supported assessments, the timeline, and the actions.
+8. Take in observations and photos through the same loop as everything else.
 
-## Standards and external records
+## Outside standards
 
-GPRIS and PPRA/e-GPS remain official-record sources; Collective is the independent observation and reconciliation layer beside them. The model uses OCDS-inspired lifecycle vocabulary and retains future join fields such as `ocds_id` and `gpris_id`, but it does not attempt to replace those systems or claim that a source is true merely because it is official.
+GPRIS and the procurement authority stay the official record. Collective sits next to them as the independent layer that compares and reconciles. The schema borrows lifecycle words from the Open Contracting Data Standard and keeps join fields like `ocds_id` and `gpris_id` for later, but it does not replace those systems, and it never treats an official source as true just because it is official.
 
-PostGIS geography columns are a later deployment upgrade. The current schema keeps `lat`/`lng` for map rendering and JSON boundaries, so spatial indexing must not be described as active until that migration is applied.
+Map columns for PostGIS come later. For now the schema keeps plain `lat`/`lng` and JSON boundaries, so spatial indexing should not be described as live until that migration lands.
