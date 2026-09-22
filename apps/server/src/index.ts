@@ -37,14 +37,10 @@ app.get("/", (c) => {
   return c.text("OK");
 });
 
-export default app;
+export { app };
 
-if (import.meta.main) {
-  const port = Number(process.env.PORT ?? 3000);
-  Bun.serve({
-    hostname: "0.0.0.0",
-    port,
-    fetch: app.fetch,
-  });
-  console.log(`Collective API listening on ${port}`);
-}
+export default {
+  port: Number(process.env.PORT ?? 3000),
+  hostname: "0.0.0.0",
+  fetch: app.fetch,
+};
