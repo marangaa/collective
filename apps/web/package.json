@@ -21,7 +21,7 @@
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "@trpc/tanstack-react-query": "^11.18.0",
-    "@varlock/vite-integration": "1.5.1",
+    "@varlock/vite-integration": "1.5.2",
     "better-auth": "^1.7.5",
     "lucide-react": "catalog:",
     "maplibre-gl": "^6.10.0",
