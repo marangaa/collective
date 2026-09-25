@@ -20,33 +20,33 @@ type CaseMapProps = {
   onSelectProject: (id: string) => void;
 };
 
-// Reliable, keyless, Retina dark basemap specification
-const CARTO_DARK_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    "carto-dark": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    },
-  },
-  layers: [
-    {
-      id: "carto-dark-layer",
-      type: "raster",
-      source: "carto-dark",
-      minzoom: 0,
-      maxzoom: 20,
-    },
-  ],
-};
+// Keyless OSS vector basemap (OpenFreeMap, OSM data). Drop-in MapLibre style,
+// no API key, no quota to watch. Attribution is rendered by MapLibre.
+const OPENFREEMAP_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark";
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+const OVERVIEW_BOUNDS_OPTIONS = {
+  padding: { top: 90, bottom: 260, left: 60, right: 60 },
+  maxZoom: 13.5,
+} as const;
+
+function fitProjectsToOverview(map: maplibregl.Map, projects: ProjectPin[]) {
+  const valid = projects.filter((p) => p.lat != null && p.lng != null);
+  if (valid.length === 0) return;
+  const bounds = valid.reduce(
+    (b, p) => b.extend([p.lng!, p.lat!]),
+    new maplibregl.LngLatBounds([valid[0]!.lng!, valid[0]!.lat!], [valid[0]!.lng!, valid[0]!.lat!]),
+  );
+  map.fitBounds(bounds, OVERVIEW_BOUNDS_OPTIONS);
+}
 
 export function CaseMap({ projects, activeProjectId, onSelectProject }: CaseMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,26 +60,16 @@ export function CaseMap({ projects, activeProjectId, onSelectProject }: CaseMapP
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: CARTO_DARK_STYLE,
+      style: OPENFREEMAP_DARK_STYLE,
       center: [36.874, -1.265], // Center of Eastlands health corridor
       zoom: 12.3,
-      attributionControl: false,
+      attributionControl: { compact: true },
     });
 
     map.on("load", () => {
       mapRef.current = map;
       setMapReady(true);
       map.resize();
-
-      // Fit bounds to all project sites
-      const valid = projects.filter((p) => p.lat != null && p.lng != null);
-      if (valid.length > 0) {
-        const bounds = valid.reduce(
-          (b, p) => b.extend([p.lng!, p.lat!]),
-          new maplibregl.LngLatBounds([valid[0]!.lng!, valid[0]!.lat!], [valid[0]!.lng!, valid[0]!.lat!]),
-        );
-        map.fitBounds(bounds, { padding: { top: 90, bottom: 260, left: 60, right: 60 }, maxZoom: 13.5 });
-      }
     });
 
     // Resize observer to handle dynamic layout
@@ -95,6 +85,15 @@ export function CaseMap({ projects, activeProjectId, onSelectProject }: CaseMapP
       markersRef.current.clear();
     };
   }, []);
+
+  // Fit overview once the map is ready and project sites arrive.
+  // Skipped while a project is selected so it doesn't yank the camera
+  // back from the fly-to effect below.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || activeProjectId) return;
+    fitProjectsToOverview(map, projects);
+  }, [projects, activeProjectId, mapReady]);
 
   // Update Markers
   useEffect(() => {
@@ -118,12 +117,14 @@ export function CaseMap({ projects, activeProjectId, onSelectProject }: CaseMapP
       el.className = "group cursor-pointer select-none";
       el.style.zIndex = isActive ? "50" : "20";
 
-      const cleanName = p.name
-        .replace("Construction of ", "")
-        .replace("Pumwani ", "")
-        .replace("Health Centre", "")
-        .replace("Dispensary", "")
-        .trim();
+      const cleanName = escapeHtml(
+        p.name
+          .replace("Construction of ", "")
+          .replace("Pumwani ", "")
+          .replace("Health Centre", "")
+          .replace("Dispensary", "")
+          .trim(),
+      );
 
       el.innerHTML = `
         <div class="flex flex-col items-center">
@@ -188,14 +189,7 @@ export function CaseMap({ projects, activeProjectId, onSelectProject }: CaseMapP
   const handleFitOverview = () => {
     const map = mapRef.current;
     if (!map) return;
-    const valid = projects.filter((p) => p.lat != null && p.lng != null);
-    if (valid.length > 0) {
-      const bounds = valid.reduce(
-        (b, p) => b.extend([p.lng!, p.lat!]),
-        new maplibregl.LngLatBounds([valid[0]!.lng!, valid[0]!.lat!], [valid[0]!.lng!, valid[0]!.lat!]),
-      );
-      map.fitBounds(bounds, { padding: { top: 90, bottom: 260, left: 60, right: 60 }, maxZoom: 13.5 });
-    }
+    fitProjectsToOverview(map, projects);
   };
 
   return (
